@@ -10,6 +10,7 @@ local ATMs = {}
 local port = 421
 
 modem.open(port)
+redstone.setAnalogOutput("bottom", 15)
 
 print("Server started on port " .. port)
 
@@ -73,7 +74,7 @@ function bank.registerUser(name)
     if (not cardDrive.isDiskPresent()) then
         return error("No card inserted")
     end
-    local cardID = tostring(cardDrive.getDiskID())
+    local cardID = cardDrive.getDiskID()
     cardDrive.setDiskLabel(name .. "'s card")
     redstone.setAnalogOutput("bottom", 0)
     sleep(.05)
@@ -134,52 +135,63 @@ local function receive_modem(e)
     end
     local id = table.remove(args, 1)
     local command = table.remove(args, 1)
-    print("Received command: " .. command .. " args: " .. table.concat(args, ", "))
-    return event, side, channel, replyChannel, command, args, id
+    local serialized = table.concat(args, " ")
+    local data = textutils.unserialize(serialized) or {}
+    print("Received command: " .. command .. " args: " .. table.concat(data, ", "))
+    return event, side, channel, replyChannel, command, data, id
 end
 
 local function handleModemRequest(e)
-    local _, _, channel, replyChannel, command, args, id = receive_modem(e)
-    local function respond(message, type)
-        modem.transmit(replyChannel, channel, message .. "\n" .. type)
+    local _, _, channel, replyChannel, command, data, id = receive_modem(e)
+    local function respond(message)
+        message.responseTo = data.messageID
+        modem.transmit(replyChannel, channel, textutils.serialize(message))
     end
     if command == "register" then
-        bank.registerUser(args[1], args[2])
-        respond("success", "success")
+        bank.registerUser(data.name)
+        respond({ status = "success" })
     elseif command == "balance" then
-        local balance = bank.getBalance(args[1])
+        local balance = bank.getBalance(data.name)
         modem.transmit(replyChannel, channel, balance)
     elseif command == "deposit" then
         if not ATMs[id] then
-            respond("ATM not registered", "error")
+            respond { status = "error", message = "ATM not registered" }
         end
-        local res = bank.deposit(args[1], args[2], args[3], args[4])
+        local res = bank.deposit(data.name, data.amount, data.cardID)
         if (res) then
-            respond("success", "success")
+            respond({ status = "success" })
         else
-            respond("failure", "error")
+            respond({ status = "error" })
         end
     elseif command == "withdraw" then
         if not ATMs[id] then
-            respond("ATM not registered", "error")
+            respond({ status = "error", message = "ATM not registered" })
         end
-        local res = bank.withdraw(args[1], tonumber(args[2]), args[3], args[4])
+        local res = bank.withdraw(data.name, data.amount, data.cardID)
         if (res) then
-            respond("success", "success")
+            respond({ status = "success" })
         else
-            respond("failure", "error")
+            respond({ status = "error" })
         end
     elseif command == "alert" then
-        bank.alert(args[1])
+        bank.alert(data.message)
     elseif command == "registerATM" then
-        registerATM(args[1], args[2], args[3])
-        respond("success", "success")
+        registerATM(id, data.port, "ONLINE")
+        respond({ status = "success" })
     elseif command == "search" then
-        local user = users[args[1]]
+        print("Searching for user " .. data.cardID)
+        local user = users[data.cardID]
         if user then
-            respond(table.concat({ user.name, user.balance }, ";"), "success")
+            print("Found user " .. user.name)
+            respond({
+                status = "success",
+                user = {
+                    name = user.name,
+                    balance = user.balance
+                }
+            })
         else
-            respond("User not found", "error")
+            respond({ status = "error", message = "Card not registered" })
         end
     end
 end
@@ -196,14 +208,14 @@ while true do
         PING_TIMER = os.startTimer(5)
         for index, value in pairs(ATMs) do
             print("Pinging ATM " .. value.id .. " on port " .. value.port)
-            modem.transmit(value.port, port, "PING")
+            modem.transmit(value.port, port, textutils.serialize({ command = "PING" }))
             local timeoutTimer = os.startTimer(1)
             local e2 = { os.pullEvent() }
             if e2[1] == "timer" and e2[2] == timeoutTimer then
                 value.status = "OFFLINE"
                 bank.alert("ATM " .. value.id .. " is offline")
             elseif e2[1] == "modem_message" then
-                local _, _, channel, replyChannel, command, args, id = receive_modem(e2)
+                local _, _, channel, replyChannel, command, data, id = receive_modem(e2)
                 if command == "PONG" then
                     os.cancelTimer(timeoutTimer)
                     print("ATM " .. value.id .. " is online")

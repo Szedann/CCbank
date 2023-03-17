@@ -3,6 +3,7 @@ local monitor = peripheral.find("monitor") or error("No monitor attached", 0)
 local diskDrive = peripheral.wrap("right")
 local interfaceStorage = peripheral.wrap("front")
 local internalStorage = peripheral.wrap("back")
+local opMode = false
 
 local bankPort = 421
 local responsePort = 531 + os.getComputerID()
@@ -83,21 +84,34 @@ local function countCoins(tab, amount)
     return result
 end
 
-local function bankRequest(command, args)
-    modem.transmit(bankPort, responsePort, os.getComputerID() .. " " .. command .. " " .. table.concat(args, " "))
+local charset = {}
+do -- [0-9a-zA-Z]
+    for c = 48, 57 do table.insert(charset, string.char(c)) end
+    for c = 65, 90 do table.insert(charset, string.char(c)) end
+    for c = 97, 122 do table.insert(charset, string.char(c)) end
+end
+
+local function randomString(length)
+    if not length or length <= 0 then return '' end
+    math.randomseed(os.clock() ^ 5)
+    return randomString(length - 1) .. charset[math.random(1, #charset)]
+end
+
+local function bankRequest(command, data)
+    local id = randomString(8)
+    data.messageID = id
+    modem.transmit(bankPort, responsePort, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
 
     -- And wait for a reply
     local event, side, channel, replyChannel, message, distance
+    local data
     repeat
         event, side, channel, replyChannel, message, distance = os.pullEvent("modem_message")
-    until channel == responsePort
+        print(event, side, channel, replyChannel, message, distance)
+        data = textutils.unserialize(message)
+    until channel == responsePort and replyChannel == bankPort and data.responseTo == id
     local lines = {}
-    for s in string.gmatch(message, "[^\n]+") do
-        table.insert(lines, s)
-    end
-    message = lines[1]
-    local type = lines[2]
-    return message, type
+    return data
 end
 
 local function checkInterfaceStorage()
@@ -130,17 +144,8 @@ local function checkInternalStorage()
     end
 end
 
-local function registerUser(name)
-    local response = bankRequest("register", { name })
-    if response == "success" then
-        print("Registered user " .. name)
-    else
-        print("Failed to register user " .. name)
-    end
-end
-
 local function getBalance(name)
-    local balance = bankRequest("balance", { name })
+    local balance = bankRequest("balance", { name = name })
     print(name .. " has " .. balance .. " cogs")
 end
 
@@ -148,25 +153,27 @@ local function deposit(amount)
     checkInterfaceStorage()
     if interfaceStorageMoney.total < amount then
         print("Not enough money in interface storage")
-        return
+        return false
     end
     local coinSlots = countCoins(interfaceStorageMoney, amount)
     if coinSlots == 0 then
-        return
+        return false
     end
     for slot, value in pairs(coinSlots) do
         interfaceStorage.pushItems("back", slot, value.count)
     end
-    local response = bankRequest("deposit", { currentUser.name, amount, currentUser.cardID })
+    local response = bankRequest("deposit", { name = currentUser.name, amount = amount, cardID = currentUser.cardID })
     if response == "success" then
         print("Deposited " .. amount .. "C into " .. currentUser.name .. "'s account")
+        return true
     else
         print("Failed to deposit " .. amount .. "C into " .. currentUser.name .. "'s account")
+        return false
     end
 end
 
 local function alert(message)
-    local response = bankRequest("alert", { message })
+    local response = bankRequest("alert", { message = message })
     if response == "success" then
         print("Alerted bank of " .. message)
     else
@@ -174,15 +181,15 @@ local function alert(message)
     end
 end
 
-local function withdraw(name, amount, cardID)
+local function withdraw(amount)
     checkInternalStorage()
     local coinSlots = countCoins(internalStorageMoney, amount)
     if (coinSlots == 0) then
         print("Not enough money in internal storage")
         alert("Not enough money in internal storage")
-        return
+        return false
     end
-    local response = bankRequest("withdraw", { name, amount, cardID })
+    local response = bankRequest("withdraw", { name = currentUser.name, amount = amount, cardID = currentUser.cardID })
     if response == "success" then
         for slot, value in pairs(coinSlots) do
             internalStorage.pushItems("front", slot, value.count)
@@ -200,19 +207,17 @@ local function receive_modem(e)
     for arg in string.gmatch(message, "%S+") do
         table.insert(args, arg)
     end
-    local command = table.remove(args, 1)
-    return event, side, channel, replyChannel, command, args
+    local data = textutils.unserialize(table.concat(args, " ")) or {}
+    return event, side, channel, replyChannel, data
 end
 
 -- Register the ATM
 
 local function registerATM()
-    local response = bankRequest("registerATM", {
-        os.getComputerID(),
-        responsePort,
-        "online"
+    local data = bankRequest("registerATM", {
+        port = responsePort
     })
-    if response == "success" then
+    if data.status == "success" then
         print("Registered ATM")
     else
         print("Failed to register ATM")
@@ -222,8 +227,8 @@ end
 registerATM()
 
 local function handleModemRequest(e)
-    local _, _, channel, replyChannel, command, args = receive_modem(e)
-    print("Received command: " .. command .. " args: " .. table.concat(args or { "none" }, ", "))
+    local _, _, channel, replyChannel, data = receive_modem(e)
+    print("Received data: " .. table.concat(data or { "none" }, ", "))
     if command == "PING" then
         modem.transmit(replyChannel, channel, os.getComputerID() .. " PONG")
     end
@@ -231,20 +236,14 @@ end
 
 local function UpdateUser()
     local cardID = diskDrive.getDiskID()
-    local data, type = bankRequest("search", { cardID })
-    if type == "error" then
-        print("Error: " .. data)
+    local data = bankRequest("search", { cardID = cardID })
+    if data.status == "error" then
+        print("Error: " .. (data.message or "Unknown"))
     else
-        local lines = {}
-        for s in string.gmatch(data, "[^;]+") do
-            table.insert(lines, s)
-        end
-        print("Found user " .. lines[1] .. " with balance " .. (lines[2] or 0))
-        local name = lines[1]
-        local balance = lines[2]
+        print("Found user " .. data.user.name .. " with balance " .. (data.user.balance or 0))
         currentUser = {
-            name = name,
-            balance = balance,
+            name = data.user.name,
+            balance = data.user.balance,
             cardID = cardID
         }
     end
@@ -267,9 +266,6 @@ while true do
         screen = "main"
     elseif e[1] == "disk_eject" then
         currentUser = nil
-        monitor.clear()
-        monitor.setCursorPos(1, 1)
-        monitor.write("Insert card")
         screen = "insert"
     elseif e[1] == "monitor_touch" then
         print("Touch: " .. screen)
@@ -351,15 +347,21 @@ while true do
         UpdateUser()
         if not currentUser then
             screen = "insert"
+        else
+            monitor.clear()
+            monitor.setCursorPos(1, 1)
+            monitor.write(currentUser.name)
+            monitor.setCursorPos(1, 2)
+            monitor.write("Bal: " .. math.floor(currentUser.balance * 100) / 100 .. "C")
+            monitor.setCursorPos(1, 4)
+            monitor.write("deposit " .. math.floor(interfaceStorageMoney.total * 100) / 100 .. "C")
+            monitor.setCursorPos(1, 5)
+            monitor.write("withdraw")
         end
+    end
+    if screen == "insert" then
         monitor.clear()
         monitor.setCursorPos(1, 1)
-        monitor.write(currentUser.name)
-        monitor.setCursorPos(1, 2)
-        monitor.write("Bal: " .. math.floor(currentUser.balance * 100) / 100 .. "C")
-        monitor.setCursorPos(1, 4)
-        monitor.write("deposit " .. math.floor(interfaceStorageMoney.total * 100) / 100 .. "C")
-        monitor.setCursorPos(1, 5)
-        monitor.write("withdraw")
+        monitor.write("Insert card")
     end
 end

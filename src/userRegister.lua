@@ -1,31 +1,43 @@
 local modem = peripheral.find("modem") or error("No modem attached", 0)
-local diskDrive = peripheral.wrap("right")
 
 local bankPort = 421
-local responsePort = 832
-
+local responsePort = 531 + os.getComputerID()
 
 modem.open(responsePort)
 
-local function bankRequest(command, args)
-    modem.transmit(bankPort, responsePort, os.getComputerID() .. " " .. command .. " " .. table.concat(args, " "))
+local charset = {}
+do -- [0-9a-zA-Z]
+    for c = 48, 57 do table.insert(charset, string.char(c)) end
+    for c = 65, 90 do table.insert(charset, string.char(c)) end
+    for c = 97, 122 do table.insert(charset, string.char(c)) end
+end
+
+local function randomString(length)
+    if not length or length <= 0 then return '' end
+    math.randomseed(os.clock() ^ 5)
+    return randomString(length - 1) .. charset[math.random(1, #charset)]
+end
+
+
+local function bankRequest(command, data)
+    local id = randomString(8)
+    data.messageID = id
+    modem.transmit(bankPort, responsePort, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
 
     -- And wait for a reply
     local event, side, channel, replyChannel, message, distance
+    local data
     repeat
         event, side, channel, replyChannel, message, distance = os.pullEvent("modem_message")
-    until channel == responsePort
+        data = textutils.unserialize(message)
+    until channel == responsePort and replyChannel == bankPort and data.responseTo == id
     local lines = {}
-    for s in string.gmatch(message, "[^\r\n]+") do
-        table.insert(lines, s)
-    end
-    message = lines[1]
-    local type = lines[2]
-    return message, type
+    return data
 end
 
+
 local function registerUser(name)
-    local response = bankRequest("register", { name })
+    local response = bankRequest("register", { name = name })
     if response == "success" then
         print("Registered user " .. name)
     else
@@ -48,9 +60,7 @@ end
 
 local function registerATM()
     local response = bankRequest("registerATM", {
-        os.getComputerID(),
-        responsePort,
-        "online"
+        port = responsePort
     })
     if response == "success" then
         print("Registered ATM")
@@ -61,6 +71,15 @@ end
 
 registerATM()
 
+w, h = term.getSize()
+term.setBackgroundColor(colors.red)
+term.setCursorPos(1, 1)
+term.clearLine()
+print("Account Creation Terminal")
+term.setBackgroundColor(colors.black)
+local window = window.create(term.current(), 1, 2, w, h - 1)
+term.redirect(window)
+
 local function handleModemRequest(e)
     local _, _, channel, replyChannel, command, args = receive_modem(e)
     print("Received command: " .. command .. " args: " .. table.concat(args or { "none" }, ", "))
@@ -69,16 +88,12 @@ local function handleModemRequest(e)
     end
 end
 
-
-
--- Main loop to listen for incoming requests
-
 while true do
     local e = { os.pullEvent() }
     if e[1] == "modem_message" then
         handleModemRequest(e)
     end
+    print("Input account name to register:")
     local username = io.stdin:read()
     registerUser(username)
-    print("Registered user " .. username)
 end
