@@ -1,8 +1,9 @@
 local modem = peripheral.find("modem") or error("No modem attached", 0)
 local monitor = peripheral.find("monitor") or error("No monitor attached", 0)
-local diskDrive = peripheral.wrap("right")
+local cardDrive = peripheral.wrap("right")
 local interfaceStorage = peripheral.wrap("front")
 local internalStorage = peripheral.wrap("back")
+local UUIDFile = "info"
 local opMode = false
 
 local bankPort = 421
@@ -144,9 +145,9 @@ local function checkInternalStorage()
     end
 end
 
-local function getBalance(name)
-    local balance = bankRequest("balance", { name = name })
-    print(name .. " has " .. balance .. " cogs")
+local function getBalance(cardID)
+    local balance = bankRequest("balance", { cardID = cardID })
+    print(currentUser.name .. " has " .. balance .. " cogs")
 end
 
 local function deposit(amount)
@@ -235,7 +236,17 @@ local function handleModemRequest(e)
 end
 
 local function UpdateUser()
-    local cardID = diskDrive.getDiskID()
+    -- read in card ID from card  
+    local UUIDPath = cardDrive.getMountPath()
+    local file = fs.open("/" .. UUIDPath .. "/" .. UUIDFile, "r")
+    local cardID
+    if (file) then
+        cardID = file.readAll()
+        file.close()
+    else
+        return 
+    end
+
     local data = bankRequest("search", { cardID = cardID })
     if data.status == "error" then
         print("Error: " .. (data.message or "Unknown"))
@@ -346,7 +357,7 @@ while true do
     if screen == "main" then
         UpdateUser()
         if not currentUser then
-            screen = "insert"
+            screen = "invalid"
         else
             monitor.clear()
             monitor.setCursorPos(1, 1)
@@ -358,6 +369,11 @@ while true do
             monitor.setCursorPos(1, 5)
             monitor.write("withdraw")
         end
+    end
+     if screen == "invalid" then
+        monitor.clear()
+        monitor.setCursorPos(1, 1)
+        monitor.write("Invalid card.\nPlease remove card and insert a valid card.")
     end
     if screen == "insert" then
         monitor.clear()
