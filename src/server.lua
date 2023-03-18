@@ -48,7 +48,6 @@ end
 loadUsers()
 
 -- Save the user database
-
 local function saveUsers()
     if (not storageDrive.isDiskPresent()) then
         return error("No storage disk inserted")
@@ -61,20 +60,23 @@ end
 -- Function to register a new user
 function bank.registerUser(name)
     if (#name > 16) then
-        return false --error("Name too long")
+        return error("Name too long")
     end
     if (#name < 3) then
-        return false --error("Name too short")
+        return error("Name too short")
     end
     for key, user in pairs(users) do
         if user.name == name then
-            return false --error("User already exists")
+            return error("User already exists")
         end
     end
     if (not cardDrive.isDiskPresent()) then
         return error("No card inserted")
     end
     local cardID = cardDrive.getDiskID()
+    if (not cardID) then
+        return error("Error creating " .. name .. "'s card")
+    end
     cardDrive.setDiskLabel(name .. "'s card")
     redstone.setAnalogOutput("bottom", 0)
     sleep(.05)
@@ -121,6 +123,21 @@ function bank.alert(message)
     print(message)
 end
 
+function printErr(err)
+    -- save current color and change text to red: error text
+    local color = term.getTextColor()
+    term.setTextColor( colors.red )
+    
+    -- trim beginning "location data" from system error message
+    trimIndex = string.find(err, ': ', 1, true)
+    if (trimIndex) then
+        err = string.sub(err,trimIndex+2)
+    end
+    print(err)
+    -- restore text color
+    term.setTextColor( color)
+end
+
 function registerATM(id, port, status)
     ATMs[id] = { id = id, port = tonumber(port), status = status }
     print("Registered ATM " .. id .. " on port " .. port)
@@ -148,8 +165,15 @@ local function handleModemRequest(e)
         modem.transmit(replyChannel, channel, textutils.serialize(message))
     end
     if command == "register" then
-        bank.registerUser(data.name)
-        respond({ status = "success" })
+        local status, err = pcall(bank.registerUser, data.name)
+       
+        if (status) then
+            respond({ status = "success" })
+        else
+            printErr(err)
+            respond({ status = "error", message = err })
+        end
+        
     elseif command == "balance" then
         local balance = bank.getBalance(data.name)
         modem.transmit(replyChannel, channel, balance)
