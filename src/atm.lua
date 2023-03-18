@@ -1,13 +1,14 @@
+local bank = require("atmBankApi")
 local modem = peripheral.find("modem") or error("No modem attached", 0)
 local monitor = peripheral.find("monitor") or error("No monitor attached", 0)
 local cardDrive = peripheral.wrap("right")
 local interfaceStorage = peripheral.wrap("front")
 local internalStorage = peripheral.wrap("back")
-local UUIDFile = "info"
 local opMode = false
 
-local bankPort = 421
 local responsePort = 531 + os.getComputerID()
+
+bank.initialize(responsePort)
 
 local coins = {
     spurs = {
@@ -46,11 +47,28 @@ local internalStorageMoney = {
 }
 
 local currentUser = nil
+local DisplayedMessage = "Unknown error"
+local screen = "insert" -- insert, info, withdraw, deposit, transfer, balance
+
+-- Function to display a message on the monitor
+
+local function displayMessage(message)
+    print("displaying message: " .. message)
+    screen = "info"
+    DisplayedMessage = message or "Unknown error"
+end
+
+local function updateUser()
+    local UUID = bank.getUUID(cardDrive)
+    print(UUID)
+    currentUser = bank.getUser(UUID)
+end
 
 modem.open(responsePort)
 
 local function countCoins(tab, amount)
-    if (tab.total or 0 < amount) then
+    if ((tab.total or 0) < amount) then
+        print("Not enough money (" .. tab.total .. " < " .. amount .. ")")
         return 0
     end
     if (tab.total == amount) then
@@ -92,29 +110,6 @@ do -- [0-9a-zA-Z]
     for c = 97, 122 do table.insert(charset, string.char(c)) end
 end
 
-local function randomString(length)
-    if not length or length <= 0 then return '' end
-    math.randomseed(os.clock() ^ 5)
-    return randomString(length - 1) .. charset[math.random(1, #charset)]
-end
-
-local function bankRequest(command, data)
-    local id = randomString(8)
-    data.messageID = id
-    modem.transmit(bankPort, responsePort, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
-
-    -- And wait for a reply
-    local event, side, channel, replyChannel, message, distance
-    local data
-    repeat
-        event, side, channel, replyChannel, message, distance = os.pullEvent("modem_message")
-        print(event, side, channel, replyChannel, message, distance)
-        data = textutils.unserialize(message)
-    until channel == responsePort and replyChannel == bankPort and data.responseTo == id
-    local lines = {}
-    return data
-end
-
 local function checkInterfaceStorage()
     interfaceStorageMoney.total = 0
     for slot, item in pairs(interfaceStorage.list()) do
@@ -145,40 +140,32 @@ local function checkInternalStorage()
     end
 end
 
-local function getBalance(cardID)
-    local balance = bankRequest("balance", { cardID = cardID })
-    print(currentUser.name .. " has " .. balance .. " cogs")
-end
-
 local function deposit(amount)
+    print("Depositing " .. amount .. "C into " .. currentUser.name .. "'s account")
     checkInterfaceStorage()
     if interfaceStorageMoney.total < amount then
         print("Not enough money in interface storage")
+        displayMessage("Not enough money in interface storage")
         return false
     end
     local coinSlots = countCoins(interfaceStorageMoney, amount)
     if coinSlots == 0 then
+        print("Not enough coins to make up " .. amount .. "C")
+        displayMessage("Not enough money in interface storage")
         return false
     end
-    for slot, value in pairs(coinSlots) do
-        interfaceStorage.pushItems("back", slot, value.count)
-    end
-    local response = bankRequest("deposit", { name = currentUser.name, amount = amount, cardID = currentUser.cardID })
-    if response == "success" then
+    local response = bank.request("deposit", { name = currentUser.name, amount = amount, cardID = currentUser.cardID })
+    if response.status == "success" then
         print("Deposited " .. amount .. "C into " .. currentUser.name .. "'s account")
+        displayMessage("Deposited " .. amount .. "C")
+        for slot, value in pairs(coinSlots) do
+            interfaceStorage.pushItems("back", slot, value.count)
+        end
         return true
     else
+        displayMessage("Failed to deposit " .. amount .. "C")
         print("Failed to deposit " .. amount .. "C into " .. currentUser.name .. "'s account")
         return false
-    end
-end
-
-local function alert(message)
-    local response = bankRequest("alert", { message = message })
-    if response == "success" then
-        print("Alerted bank of " .. message)
-    else
-        print("Failed to alert bank of " .. message)
     end
 end
 
@@ -187,92 +174,34 @@ local function withdraw(amount)
     local coinSlots = countCoins(internalStorageMoney, amount)
     if (coinSlots == 0) then
         print("Not enough money in internal storage")
-        alert("Not enough money in internal storage")
+        bank.alertServer("Not enough money in internal storage")
+        displayMessage("Not enough money in internal storage")
         return false
     end
-    local response = bankRequest("withdraw", { name = currentUser.name, amount = amount, cardID = currentUser.cardID })
-    if response == "success" then
+    local response = bank.request("withdraw", { name = currentUser.name, amount = amount, cardID = currentUser.cardID })
+    if response.status == "success" then
         for slot, value in pairs(coinSlots) do
             internalStorage.pushItems("front", slot, value.count)
         end
-        print("Withdrew " .. amount .. "C from " .. name .. "'s account")
+        displayMessage("Withdrew " .. amount .. "C")
+        print("Withdrew " .. amount .. "C from " .. currentUser.name .. "'s account")
     else
-        print("Failed to withdraw " .. amount .. "C from " .. name .. "'s account")
+        displayMessage("Failed to withdraw " .. amount .. "C")
+        print("Failed to withdraw " .. amount .. "C from " .. currentUser.name .. "'s account")
     end
 end
-
-local function receive_modem(e)
-    event, side, channel, replyChannel, message, distance = table.unpack(e)
-    print(event, side, channel, replyChannel, message, distance)
-    local args = {}
-    for arg in string.gmatch(message, "%S+") do
-        table.insert(args, arg)
-    end
-    local data = textutils.unserialize(table.concat(args, " ")) or {}
-    return event, side, channel, replyChannel, data
-end
-
--- Register the ATM
-
-local function registerATM()
-    local data = bankRequest("registerATM", {
-        port = responsePort
-    })
-    if data.status == "success" then
-        print("Registered ATM")
-    else
-        print("Failed to register ATM")
-    end
-end
-
-registerATM()
-
-local function handleModemRequest(e)
-    local _, _, channel, replyChannel, data = receive_modem(e)
-    print("Received data: " .. table.concat(data or { "none" }, ", "))
-    if command == "PING" then
-        modem.transmit(replyChannel, channel, os.getComputerID() .. " PONG")
-    end
-end
-
-local function UpdateUser()
-    -- read in card ID from card  
-    local UUIDPath = cardDrive.getMountPath()
-    local file = fs.open("/" .. UUIDPath .. "/" .. UUIDFile, "r")
-    local cardID
-    if (file) then
-        cardID = file.readAll()
-        file.close()
-    else
-        return 
-    end
-
-    local data = bankRequest("search", { cardID = cardID })
-    if data.status == "error" then
-        print("Error: " .. (data.message or "Unknown"))
-    else
-        print("Found user " .. data.user.name .. " with balance " .. (data.user.balance or 0))
-        currentUser = {
-            name = data.user.name,
-            balance = data.user.balance,
-            cardID = cardID
-        }
-    end
-end
-
-
 
 -- Main loop to listen for incoming requests
 
-local screen = "insert"
 monitor.setTextScale(0.5)
+local w, h = monitor.getSize()
 local withdrawAmountString = ""
 
 while true do
     checkInterfaceStorage()
     local e = { os.pullEvent() }
     if e[1] == "modem_message" then
-        handleModemRequest(e)
+        bank.handleModemRequest(e)
     elseif e[1] == "disk" then
         screen = "main"
     elseif e[1] == "disk_eject" then
@@ -280,12 +209,14 @@ while true do
         screen = "insert"
     elseif e[1] == "monitor_touch" then
         print("Touch: " .. screen)
+        if screen == "info" then
+            screen = "main"
+        end
         if screen == "main" then
             local x, y = e[3], e[4]
             print(x, y)
             if y == 4 then
                 deposit(interfaceStorageMoney.total)
-                screen = "main"
             elseif y == 5 then
                 screen = "withdraw"
                 monitor.clear()
@@ -310,10 +241,10 @@ while true do
             end
         elseif screen == "withdraw" then
             local x, y = e[3], e[4]
+
             if y == 5 then
-                withdraw(currentUser.name, tonumber(withdrawAmountString), currentUser.cardID)
-                withdrawAmountString = ""
-                screen = "main"
+                withdraw(tonumber(withdrawAmountString))
+                withdrawAmountString = "0"
             end
             print(x, y)
             if y == 7 then
@@ -354,8 +285,19 @@ while true do
             monitor.write((tonumber(withdrawAmountString) or 0) .. "C")
         end
     end
-    if screen == "main" then
-        UpdateUser()
+    if screen == "info" then
+        print("Info: " .. DisplayedMessage)
+        monitor.clear()
+        local wrappedErrorMessageLines = require "cc.strings".wrap(DisplayedMessage, w)
+        for i, line in ipairs(wrappedErrorMessageLines) do
+            monitor.setCursorPos(1, i)
+            monitor.write(line)
+        end
+        monitor.setCursorPos(1, h)
+        monitor.write("Continue")
+    elseif screen == "main" then
+        checkInterfaceStorage()
+        updateUser()
         if not currentUser then
             screen = "invalid"
         else
@@ -370,7 +312,7 @@ while true do
             monitor.write("withdraw")
         end
     end
-     if screen == "invalid" then
+    if screen == "invalid" then
         monitor.clear()
         monitor.setCursorPos(1, 1)
         monitor.write("Invalid card.\nPlease remove card and insert a valid card.")

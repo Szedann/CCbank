@@ -1,7 +1,7 @@
 local modem = peripheral.find("modem") or error("No modem attached", 0)
 local storageDrive = peripheral.wrap("back")
 local cardDrive = peripheral.wrap("right")
-local pingInterval = 5*60
+local pingInterval = 5 * 60
 local UUIDFile = "info"
 local bank = {}
 local users = {}
@@ -60,7 +60,7 @@ end
 -- generate unique IDs
 local function genUUID(atmID)
     ts = os.time(os.date("!*t"))
-    UUID = atmID..ts
+    UUID = atmID .. ts
     UUID = string.format("%x", tonumber(UUID))
     return UUID
 end
@@ -89,7 +89,7 @@ function bank.registerUser(name, atmID)
     end
     cardDrive.setDiskLabel(name .. "'s card")
 
-    -- write card ID to card    
+    -- write card ID to card
     local UUIDPath = cardDrive.getMountPath()
     local file = fs.open("/" .. UUIDPath .. "/" .. UUIDFile, "w")
     file.write(cardID)
@@ -99,7 +99,7 @@ function bank.registerUser(name, atmID)
     redstone.setAnalogOutput("bottom", 0)
     sleep(.05)
     redstone.setAnalogOutput("bottom", 15)
-    
+
     -- save user data
     users[cardID] = { name = name, balance = 0 }
     saveUsers()
@@ -139,30 +139,36 @@ end
 
 -- Function to handle incoming alerts
 function bank.alert(message)
-    term.clear()
+    local color = term.getTextColor()
+    term.setTextColor(colors.red)
+
     print(message)
+
+    -- restore text color
+    term.setTextColor(color)
 end
 
 function trimErr(err)
     -- trim beginning "location data" from system error message
     trimIndex = string.find(err, ': ', 1, true)
     if (trimIndex) then
-        err = string.sub(err,trimIndex+2)
+        err = string.sub(err, trimIndex + 2)
     end
     return err
 end
+
 function printErr(err)
     -- save current color and change text to red: error text
     local color = term.getTextColor()
-    term.setTextColor( colors.red )
-    
+    term.setTextColor(colors.red)
+
     print(err)
-    
+
     -- restore text color
-    term.setTextColor( color)
+    term.setTextColor(color)
 end
 
-function registerATM(id, port, status)
+local function registerATM(id, port, status)
     ATMs[id] = { id = id, port = tonumber(port), status = status }
     print("Registered ATM " .. id .. " on port " .. port)
 end
@@ -189,7 +195,7 @@ local function handleModemRequest(e)
         modem.transmit(replyChannel, channel, textutils.serialize(message))
     end
     if command == "register" then
-       local status, err = pcall(bank.registerUser, data.name, id)
+        local status, err = pcall(bank.registerUser, data.name, id)
 
         if (status) then
             respond({ status = "success" })
@@ -197,7 +203,6 @@ local function handleModemRequest(e)
             printErr(err)
             respond({ status = "error", message = trimErr(err) })
         end
-        
     elseif command == "balance" then
         local balance = bank.getBalance(data.cardID)
         modem.transmit(replyChannel, channel, balance)
@@ -222,7 +227,8 @@ local function handleModemRequest(e)
             respond({ status = "error" })
         end
     elseif command == "alert" then
-        bank.alert(data.message)
+        bank.alert("ATM " .. id .. ": " .. data.message)
+        respond({ status = "success" })
     elseif command == "registerATM" then
         registerATM(id, data.port, "ONLINE")
         respond({ status = "success" })
