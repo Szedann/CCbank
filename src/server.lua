@@ -1,8 +1,8 @@
 local modem = peripheral.find("modem") or error("No modem attached", 0)
 local storageDrive = peripheral.wrap("back")
 local cardDrive = peripheral.wrap("right")
-local pingInterval = 5
-
+local pingInterval = 5*60
+local UUIDFile = "info"
 local bank = {}
 local users = {}
 local ATMs = {}
@@ -57,8 +57,17 @@ local function saveUsers()
     file.close()
 end
 
+-- generate unique IDs
+local function genUUID(atmID)
+    ts = os.time(os.date("!*t"))
+    UUID = atmID..ts
+    UUID = string.format("%x", tonumber(UUID))
+    return UUID
+end
+
+
 -- Function to register a new user
-function bank.registerUser(name)
+function bank.registerUser(name, atmID)
     if (#name > 16) then
         return error("Name too long")
     end
@@ -73,21 +82,32 @@ function bank.registerUser(name)
     if (not cardDrive.isDiskPresent()) then
         return error("No card inserted")
     end
-    local cardID = cardDrive.getDiskID()
+    --local cardID = cardDrive.getDiskID()
+    local cardID = genUUID(atmID)
     if (not cardID) then
         return error("Error creating " .. name .. "'s card")
     end
     cardDrive.setDiskLabel(name .. "'s card")
+
+    -- write card ID to card    
+    local UUIDPath = cardDrive.getMountPath()
+    local file = fs.open("/" .. UUIDPath .. "/" .. UUIDFile, "w")
+    file.write(cardID)
+    file.close()
+
+    -- output card
     redstone.setAnalogOutput("bottom", 0)
     sleep(.05)
     redstone.setAnalogOutput("bottom", 15)
+    
+    -- save user data
     users[cardID] = { name = name, balance = 0 }
     saveUsers()
 end
 
 -- Function to get a user's balance
-function bank.getBalance(name)
-    return users[name].balance
+function bank.getBalance(cardID)
+    return users[cardID].balance
 end
 
 -- Function to handle an incoming deposit
@@ -123,17 +143,21 @@ function bank.alert(message)
     print(message)
 end
 
-function printErr(err)
-    -- save current color and change text to red: error text
-    local color = term.getTextColor()
-    term.setTextColor( colors.red )
-    
+function trimErr(err)
     -- trim beginning "location data" from system error message
     trimIndex = string.find(err, ': ', 1, true)
     if (trimIndex) then
         err = string.sub(err,trimIndex+2)
     end
+    return err
+end
+function printErr(err)
+    -- save current color and change text to red: error text
+    local color = term.getTextColor()
+    term.setTextColor( colors.red )
+    
     print(err)
+    
     -- restore text color
     term.setTextColor( color)
 end
@@ -165,17 +189,17 @@ local function handleModemRequest(e)
         modem.transmit(replyChannel, channel, textutils.serialize(message))
     end
     if command == "register" then
-        local status, err = pcall(bank.registerUser, data.name)
-       
+       local status, err = pcall(bank.registerUser, data.name, id)
+
         if (status) then
             respond({ status = "success" })
         else
             printErr(err)
-            respond({ status = "error", message = err })
+            respond({ status = "error", message = trimErr(err) })
         end
         
     elseif command == "balance" then
-        local balance = bank.getBalance(data.name)
+        local balance = bank.getBalance(data.cardID)
         modem.transmit(replyChannel, channel, balance)
     elseif command == "deposit" then
         if not ATMs[id] then
@@ -221,7 +245,7 @@ local function handleModemRequest(e)
 end
 
 
-local PING_TIMER = os.startTimer(5 * 60)
+local PING_TIMER = os.startTimer(pingInterval)
 -- Main loop to listen for incoming requests
 while true do
     local e = { os.pullEvent() }
@@ -229,7 +253,7 @@ while true do
         handleModemRequest(e)
     elseif e[1] == "timer" and e[2] == PING_TIMER then
         print("Pinging ATMs")
-        PING_TIMER = os.startTimer(5)
+        PING_TIMER = os.startTimer(pingInterval)
         for index, value in pairs(ATMs) do
             print("Pinging ATM " .. value.id .. " on port " .. value.port)
             modem.transmit(value.port, port, textutils.serialize({ command = "PING" }))
