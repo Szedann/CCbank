@@ -37,11 +37,12 @@ end
 
 
 local function registerUser(name)
-    local response = bankRequest("register", { name = name })
-    if response == "success" then
+    local data = bankRequest("register", { name = name })
+    if data.status == "success" then
         print("Registered user " .. name)
     else
         print("Failed to register user " .. name)
+        print(data.message)
     end
 end
 
@@ -59,10 +60,10 @@ end
 -- Register the ATM
 
 local function registerATM()
-    local response = bankRequest("registerATM", {
+    local data = bankRequest("registerATM", {
         port = responsePort
     })
-    if response == "success" then
+    if data.status == "success" then
         print("Registered ATM")
     else
         print("Failed to register ATM")
