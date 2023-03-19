@@ -66,10 +66,17 @@ local function bankRequest(command, data, expectResponse)
     if not expectResponse then
         return
     end
+    local timeoutTimer = os.startTimer(5)
     repeat
-        event, side, channel, replyChannel, message, distance = os.pullEvent("modem_message")
-        if (logging) then print(event, side, channel, replyChannel, message, distance) end
-        data = textutils.unserialize(message)
+        e = { os.pullEvent() }
+
+        if e[1] == "timer" and e[2] == timeoutTimer then
+            error("Bank request timed out")
+        elseif e[1] == "modem_message" then
+            event, side, channel, replyChannel, message, distance = table.unpack(e)
+            if (logging) then print(event, side, channel, replyChannel, message, distance) end
+            data = textutils.unserialize(message)
+        end
     until channel == responsePort and replyChannel == bankPort and data.responseTo == id
     return data
 end
