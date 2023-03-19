@@ -134,7 +134,7 @@ function bank.withdraw(name, amount, cardID)
     if user.name ~= name then
         error("Incorrect Card")
     elseif user.balance < amount then
-       error("Insufficient funds")
+        error("Insufficient funds")
     else
         user.balance = user.balance - amount
         saveUsers()

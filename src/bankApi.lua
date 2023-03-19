@@ -76,9 +76,9 @@ end
 
 local function getBalance()
     local data = bankRequest("balance", { cardID = currentUser.cardID })
-     if (data.status == "success") then
-         if (logging) then print(currentUser.name .. " has " .. balance .. " cogs") end
-         currentUser.balance = data.balance
+    if (data.status == "success") then
+        if (logging) then print(currentUser.name .. " has " .. balance .. " cogs") end
+        currentUser.balance = data.balance
     else
         if (logging) then print("Failed to get " .. currentUser.name .. "'s account balance.") end
     end
