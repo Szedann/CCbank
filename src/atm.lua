@@ -31,7 +31,7 @@ local function countCoins(tab, amount)
         data.slot = slot
     end
 
-    table.sort(tab.detail, function(a, b) return coins[a.coin].rate > coins[b.coin].rate end)
+    table.sort(tab.detail, function(a, b) return bank.coins[a.coin].rate > bank.coins[b.coin].rate end)
     for _, data in pairs(tab.detail) do
         local coin = bank.coins[data.coin]
         local count = math.floor((amount - total) / coin.rate)
@@ -85,13 +85,13 @@ end
 -- screen variables
 local DisplayedMessage = "Unknown error"
 local screen = "insert" -- insert, info, withdraw, deposit, transfer, balance(main)
-local skipInfo = true -- true if user can continue from current info screen
+local skipInfo = true   -- true if user can continue from current info screen
 monitor.setTextScale(0.5)
 local w, h = monitor.getSize()
 
 -- call to update UI state
 local function updateUI()
-if screen == "info" then
+    if screen == "info" then
         if (bank.logging) then print("Info: " .. DisplayedMessage) end
         monitor.clear()
         local wrappedErrorMessageLines = require "cc.strings".wrap(DisplayedMessage, w)
@@ -125,7 +125,7 @@ end
 -- Function to display a message on the monitor
 local function displayMessage(message, skip)
     if (skip == nil) then skip = true end -- skip defaults to true if not passed
-    
+
     if (bank.logging) then print("displaying message: " .. message) end
     screen = "info"
     skipInfo = skip
@@ -148,7 +148,8 @@ local function deposit(amount)
         if (bank.logging) then print("Not enough money in interface storage")
         displayMessage("Not enough money in interface storage") end
         return false
-    end]]--
+    end]]
+          --
     local coinSlots = countCoins(interfaceStorageMoney, amount)
     if coinSlots == 0 then
         if (bank.logging) then print("Not enough coins to make up " .. amount .. "C") end
