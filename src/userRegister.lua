@@ -1,13 +1,10 @@
 local bank = require("atmBankApi")
 
-local bankPort = 421
-local responsePort = 531 + os.getComputerID()
-
-bank.initialize(responsePort)
+bank.initialize()
 
 local function registerUser(name)
     local data = bank.request("register", { name = name })
-    if data.status == "success" then
+    if (data.status == "success") then
         print("Registered user " .. name)
     else
         print("Failed to register user " .. name)
