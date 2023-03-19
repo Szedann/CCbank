@@ -71,15 +71,18 @@ local function bankRequest(command, data, expectResponse)
         if (logging) then print(event, side, channel, replyChannel, message, distance) end
         data = textutils.unserialize(message)
     until channel == responsePort and replyChannel == bankPort and data.responseTo == id
-    local lines = {}
     return data
 end
 
-local function getBalance(cardID)
-    local balance = bankRequest("balance", { cardID = cardID })
-    if (logging) then print(currentUser.name .. " has " .. balance .. " cogs") end
+local function getBalance()
+    local data = bankRequest("balance", { cardID = currentUser.cardID })
+     if (data.status == "success") then
+         if (logging) then print(currentUser.name .. " has " .. balance .. " cogs") end
+         currentUser.balance = data.balance
+    else
+        if (logging) then print("Failed to get " .. currentUser.name .. "'s account balance.") end
+    end
 end
-
 
 local function receive_modem(e)
     event, side, channel, replyChannel, message, distance = table.unpack(e)
@@ -104,6 +107,9 @@ local function getUUID(cardDrive)
 end
 
 local function getUser(UUID)
+    if (not UUID) then
+        return nil
+    end
     local data = bankRequest("search", { cardID = UUID })
     if data.status == "error" then
         if (logging) then print("Error: " .. (data.message or "Unknown")) end
@@ -123,9 +129,9 @@ return {
     request = bankRequest,
     randomString = randomString,
     receive_modem = receive_modem,
+    modem = modem,
     coins = coins,
     initialize = initialize,
-    bankPort = bankPort,
     getUUID = getUUID,
     logging = logging
 }
