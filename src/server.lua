@@ -57,6 +57,11 @@ local function saveUsers()
     file.close()
 end
 
+local function getUser(cardID)
+    print("Searching for user ID: " .. cardID)
+    return users[cardID]
+end
+
 -- generate unique IDs
 local function genUUID(atmID)
     ts = os.time(os.date("!*t"))
@@ -114,7 +119,7 @@ end
 function bank.deposit(name, amount, cardID)
     local user = users[cardID]
     if user.name ~= name then
-        return false --error("Incorrect Card")
+        error("Incorrect Card")
     end
     local balance = users[cardID].balance
     users[cardID].balance = balance + amount
@@ -127,9 +132,9 @@ function bank.withdraw(name, amount, cardID)
     print(name, amount, cardID)
     local user = users[cardID]
     if user.name ~= name then
-        return false --error("Incorrect Card")
+        error("Incorrect Card")
     elseif user.balance < amount then
-        return false --error("Insufficient funds")
+       error("Insufficient funds")
     else
         user.balance = user.balance - amount
         saveUsers()
@@ -195,57 +200,66 @@ local function handleModemRequest(e)
         modem.transmit(replyChannel, channel, textutils.serialize(message))
     end
     if command == "register" then
-        local status, err = pcall(bank.registerUser, data.name, id)
+        local status, res = pcall(bank.registerUser, data.name, id)
 
         if (status) then
             respond({ status = "success" })
         else
-            printErr(err)
-            respond({ status = "error", message = trimErr(err) })
+            printErr(res)
+            respond({ status = "error", message = trimErr(res) })
         end
     elseif command == "balance" then
-        local balance = bank.getBalance(data.cardID)
-        modem.transmit(replyChannel, channel, balance)
+        local status, res = pcall(bank.getBalance, data.cardID)
+        if (status) then
+            respond({ status = "success", balance = res })
+        else
+            printErr(res)
+            respond({ status = "error", message = trimErr(res) })
+        end
     elseif command == "deposit" then
         if not ATMs[id] then
             respond { status = "error", message = "ATM not registered" }
         end
-        local res = bank.deposit(data.name, data.amount, data.cardID)
-        if (res) then
+        local status, res = pcall(bank.deposit, data.name, data.amount, data.cardID)
+        if (status) then
             respond({ status = "success" })
         else
-            respond({ status = "error" })
+            printErr(res)
+            respond({ status = "error", message = trimErr(res) })
         end
     elseif command == "withdraw" then
         if not ATMs[id] then
             respond({ status = "error", message = "ATM not registered" })
         end
-        local res = bank.withdraw(data.name, data.amount, data.cardID)
-        if (res) then
+        local status, res = pcall(bank.withdraw, data.name, data.amount, data.cardID)
+        if (status) then
             respond({ status = "success" })
         else
-            respond({ status = "error" })
+            printErr(res)
+            respond({ status = "error", message = trimErr(res) })
         end
     elseif command == "alert" then
+        -- alerts could never throw an error (to my knowledge)
         bank.alert("ATM " .. id .. ": " .. data.message)
         respond({ status = "success" })
     elseif command == "registerATM" then
+        -- registering an ATM could never throw an error (to my knowledge)
         registerATM(id, data.port, "ONLINE")
         respond({ status = "success" })
     elseif command == "search" then
-        print("Searching for user " .. data.cardID)
-        local user = users[data.cardID]
-        if user then
-            print("Found user " .. user.name)
+        local status, res = pcall(getUser, data.cardID)
+        if status then
+            print("Found user " .. res.name)
             respond({
                 status = "success",
                 user = {
-                    name = user.name,
-                    balance = user.balance
+                    name = res.name,
+                    balance = res.balance
                 }
             })
         else
-            respond({ status = "error", message = "Card not registered" })
+            printErr(res)
+            respond({ status = "error", message = "Card not registered." })
         end
     end
 end
