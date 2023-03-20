@@ -223,6 +223,7 @@ end
 local withdrawAmountString = "0"
 
 local function onEvent(event)
+    checkInterfaceStorage()
     -- call api listners first
     local handled = bank.onEvent(event)
 
@@ -328,19 +329,6 @@ end
 local function main()
     -- run any start methods for the APIs
     bank.onStart()
-
-    while true do
-        checkInterfaceStorage()
-
-        -- not needed as we now use cryptoNet
-        --[[local e = { os.pullEvent() }
-    if e[1] == "modem_message" then
-        bank.handleModemRequest(e)
-    else
-
-    end]]
-        --
-    end
 end
 
 -- intialize, passing main and this onEvent function as the entry listener
