@@ -207,7 +207,6 @@ local function handleRequest(id, command, data)
                 user = {
                     name = res.name,
                     balance = res.balance,
-                    cardID = data.cardID
                 }
             })
         else
