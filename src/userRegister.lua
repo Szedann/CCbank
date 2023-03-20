@@ -1,18 +1,19 @@
 local bank = require("atmBankApi")
 local prompt = true -- set to true when terminal should prompt user
 
-local function registerUserCallback(data)
-    if (data.status == "success") then
-        print("Registered user " .. data.name)
-    else
-        print("Failed to register user " .. data.name)
-        print(data.message)
-    end
-    -- prompt user for another registration
-    prompt = true;
-end
 local function registerUser(name)
-    bank.request("register", { name = name }, registerUserCallback)
+    bank.request("register", { name = name },
+        function(response)
+            if (response.status == "success") then
+                print("Registered user " .. name)
+            else
+                print("Failed to register user " .. name)
+                print(response.message)
+            end
+            -- prompt user for another registration
+            prompt = true;
+        end
+    )
 end
 
 local function onEvent(event)

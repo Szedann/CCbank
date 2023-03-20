@@ -1,26 +1,28 @@
 local bank = require("bankApi")
 local opMode = false
 
-local function alertServerCallback(data)
-    if (data.status == "success") then
-        if (bank.logging) then print("Alerted bank of " .. data.message) end
-    else
-        if (bank.logging) then print("Failed to alert bank of " .. data.message) end
-    end
-end
 local function alertServer(message)
-    bank.request("alert", { message = message }, alertServerCallback)
+    bank.request("alert", { message = message },
+        function(respose)
+            if (respose.status == "success") then
+                if (bank.logging) then print("Alerted bank of " .. message) end
+            else
+                if (bank.logging) then print("Failed to alert bank of " .. message) end
+            end
+        end
+    )
 end
 
-local function registerATMCallback(data)
-    if (data.status == "success") then
-        if (bank.logging) then print("Registered ATM") end
-    else
-        if (bank.logging) then print("Failed to register ATM") end
-    end
-end
 local function registerATM()
-    bank.request("registerATM", {}, registerATMCallback)
+    bank.request("registerATM", {},
+        function(response)
+            if (response.status == "success") then
+                if (bank.logging) then print("Registered ATM") end
+            else
+                if (bank.logging) then print("Failed to register ATM") end
+            end
+        end
+    )
 end
 
 local function initialize(onParentStart, onParentEvent)

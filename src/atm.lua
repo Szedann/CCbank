@@ -133,20 +133,21 @@ local function displayMessage(message, skip)
     updateUI()
 end
 
-local function updateUserCallback(user)
-    currentUser = user
-    if not currentUser then
-        displayMessage("Invalid card. Please remove card and insert a valid card.", false)
-    else
-        screen = "main"
-    end
-    updateUI()
-end
 local function updateUser()
     local UUID = bank.getUUID(cardDrive)
     if (bank.logging) then print(UUID) end
     displayMessage("Reading Card. Please Wait...", false)
-    bank.getUser(UUID, updateUserCallback)
+    bank.getUser(UUID,
+        function(response)
+            currentUser = response
+            if not currentUser then
+                displayMessage("Invalid card. Please remove card and insert a valid card.", false)
+            else
+                screen = "main"
+            end
+            updateUI()
+        end
+    )
 end
 
 local function deposit(amount)

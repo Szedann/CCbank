@@ -155,10 +155,10 @@ local function handleRequest(id, command, data)
     if command == "register" then
         local status, res = pcall(registerUser, data.name, id)
         if (status) then
-            respond({ status = "success", name = data.name })
+            respond({ status = "success" })
         else
             bank.printErr(res)
-            respond({ status = "error", name = data.name, message = bank.trimErr(res) })
+            respond({ status = "error", message = bank.trimErr(res) })
         end
     elseif command == "balance" then
         local status, res = pcall(getBalance, data.cardID)
@@ -193,7 +193,7 @@ local function handleRequest(id, command, data)
     elseif command == "alert" then
         -- alerts could never throw an error (to my knowledge)
         alert("ATM " .. id .. ": " .. data.message)
-        respond({ status = "success", message = data.message })
+        respond({ status = "success" })
     elseif command == "registerATM" then
         -- registering an ATM could never throw an error (to my knowledge)
         registerATM(id, "ONLINE")
