@@ -1,7 +1,26 @@
-local modem = peripheral.find("modem") or error("No modem attached", 0)
 local UUIDFile = "info"
-local bankPort = 421
+local cryptoNetPath = "cryptoNet"
+local cryptoNetURL = "https://raw.githubusercontent.com/SiliconSloth/CryptoNet/master/cryptoNet.lua"
+local serverName = "BANK - Server"
+local socket = nil
+local callbacks = {}       -- functions to call after getting a response
+local midCallbacks = {}    -- functions to call before returning data after getting a response
+local messageHandler = nil -- handles responding to message received
+local isServer = false     -- will get set based on parent calls
+local cryptoLogging = true
 local logging = false
+
+-- check for and download needed cryptoNet API
+if not fs.exists(cryptoNetPath) then
+    print("can't find " .. cryptoNetPath .. " API file.\nDownloading, please wait...")
+    shell.run("wget", cryptoNetURL, cryptoNetPath)
+    -- TODO: handle no internet connection, and download errors
+    repeat
+    until fs.exists(cryptoNetPath) -- wait for downlaod to finish
+end
+
+os.loadAPI(cryptoNetPath)
+cryptoNet.setLoggingEnabled(cryptoLogging)
 
 local coins = {
     spurs = {
@@ -30,13 +49,6 @@ local coins = {
     }
 }
 
-local responsePort
-
-local function initialize(port)
-    responsePort = port
-    modem.open(responsePort)
-end
-
 local currentUser = nil
 
 local charset = {}
@@ -52,23 +64,34 @@ local function randomString(length)
     return randomString(length - 1) .. charset[math.random(1, #charset)]
 end
 
-local function bankRequest(command, data, expectResponse)
-    if expectResponse == nil then
-        expectResponse = true
-    end
+-- currently sends message to client from server in response to client
+local function respond(message, messageData)
+    message.responseTo = messageData.messageID
+    cryptoNet.send(messageData.socket, textutils.serialize(message))
+    --modem.transmit(replyChannel, channel, textutils.serialize(message))
+end
+
+-- currently sends message from client to server
+local function bankRequest(command, data, callback, midCallback)
     local id = randomString(8)
+    if (callback) then -- if we have a callback
+        callbacks[id] = callback
+    end
+    if (midCallback) then -- if we have a callback
+        midCallbacks[id] = midCallback
+    end
     data.messageID = id
-    modem.transmit(bankPort, responsePort, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
+    cryptoNet.send(socket, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
 
     -- And wait for a reply
-    local event, side, channel, replyChannel, message, distance
+    --[[local event, side, channel, replyChannel, message, distance
     local data
     if not expectResponse then
         return
     end
     local timeoutTimer = os.startTimer(5)
     repeat
-        e = { os.pullEvent() }
+        local e = { os.pullEvent() }
 
         if e[1] == "timer" and e[2] == timeoutTimer then
             error("Bank request timed out")
@@ -78,19 +101,43 @@ local function bankRequest(command, data, expectResponse)
             data = textutils.unserialize(message)
         end
     until channel == responsePort and replyChannel == bankPort and data.responseTo == id
-    return data
+    return data]]
+    --
 end
-
-local function getBalance()
-    local data = bankRequest("balance", { cardID = currentUser.cardID })
+local function getBalanceCallback(data)
     if (data.status == "success") then
-        if (logging) then print(currentUser.name .. " has " .. balance .. " cogs") end
+        if (logging) then print(currentUser.name .. " has " .. data.balance .. " cogs") end
         currentUser.balance = data.balance
     else
         if (logging) then print("Failed to get " .. currentUser.name .. "'s account balance.") end
     end
 end
+local function getBalance()
+    bankRequest("balance", { cardID = currentUser.cardID }, getBalanceCallback)
+end
 
+
+local function getUserCallback(data, callback)
+    if (data.status == "error") then
+        if (logging) then print("Error: " .. (data.message or "Unknown")) end
+        callback(nil)
+    else
+        callback({
+            name = data.user.name,
+            balance = data.user.balance,
+            cardID = data.user.cardID
+        })
+    end
+end
+local function getUser(UUID, callback)
+    if (not UUID or not callback) then
+        callback(nil)
+    end
+    bankRequest("search", { cardID = UUID }, callback, getUserCallback)
+end
+
+-- replaced by cryptoNet's Event Loop
+--[[
 local function receive_modem(e)
     event, side, channel, replyChannel, message, distance = table.unpack(e)
     if (logging) then print(event, side, channel, replyChannel, message, distance) end
@@ -100,8 +147,35 @@ local function receive_modem(e)
     end
     local data = textutils.unserialize(table.concat(args, " ")) or {}
     return event, side, channel, replyChannel, data
+end]]
+--
+
+local function trimErr(err)
+    -- trim beginning "location data" from system error message
+    local trimIndex = string.find(err, ': ', 1, true)
+    if (trimIndex) then
+        err = string.sub(err, trimIndex + 2)
+    end
+    return err
 end
 
+local function printErr(err)
+    -- save current color and change text to red: error text
+    local color = term.getTextColor()
+    term.setTextColor(colors.red)
+
+    print(err)
+
+    -- restore text color
+    term.setTextColor(color)
+end
+
+local function setUUID(cardDrive, cardID)
+    local UUIDPath = cardDrive.getMountPath()
+    local file = fs.open("/" .. UUIDPath .. "/" .. UUIDFile, "w")
+    file.write(cardID)
+    file.close()
+end
 local function getUUID(cardDrive)
     local UUIDPath = cardDrive.getMountPath()
     local file = fs.open("/" .. UUIDPath .. "/" .. UUIDFile, "r")
@@ -113,21 +187,75 @@ local function getUUID(cardDrive)
     return cardID
 end
 
-local function getUser(UUID)
-    if (not UUID) then
-        return nil
-    end
-    local data = bankRequest("search", { cardID = UUID })
-    if data.status == "error" then
-        if (logging) then print("Error: " .. (data.message or "Unknown")) end
-        return nil
+-- Runs every time an event occurs
+local function onEvent(event)
+    --print(event[1])
+    local handled = false
+    -- Received a message from the server
+    if event[1] == "connection_closed" then
+        -- close socket
+        cryptoNet.close(event[2])
+    elseif event[1] == "encrypted_message" then
+        handled = true
+        local args = {}
+        for arg in string.gmatch(event[2], "%S+") do
+            table.insert(args, arg)
+        end
+        if (isServer) then
+            -- uppack message request
+            local id = table.remove(args, 1)
+            local command = table.remove(args, 1)
+            local serialized = table.concat(args, " ")
+            local data = textutils.unserialize(serialized) or {}
+            if (logging) then print("Received command: " .. command .. " args: " .. table.concat(data, ", ")) end
+            -- socket of request sender, use this to respond
+            data.socket = event[3]
+            -- send message to server handler
+            messageHandler(id, command, data)
+        else
+            -- unpack message response
+            local data = textutils.unserialize(table.concat(args, " ")) or {}
+            if (logging) then print("got message: " .. data.responseTo) end
+            -- check for a minddle response callback
+            if (midCallbacks[data.responseTo]) then
+                midCallbacks[data.responseTo](data, callbacks[data.responseTo])
+                -- callback used, set this respose id to nil to "remove" it
+                midCallbacks[data.responseTo] = nil
+                callbacks[data.responseTo] = nil
+            elseif (callbacks[data.responseTo]) then -- check for a response callback
+                callbacks[data.responseTo](data)
+                -- callback used, set this respose id to nil to "remove" it
+                callbacks[data.responseTo] = nil
+            end
+        end
     else
-        return {
-            name = data.user.name,
-            balance = data.user.balance,
-            cardID = UUID
-        }
+
     end
+
+    return handled
+end
+
+local function onStart()
+    if (isServer) then
+        -- Start the server
+        cryptoNet.host(serverName)
+    else
+        -- connect to server
+        local status, res = pcall(cryptoNet.connect, serverName)
+        if (status) then
+            socket = res
+            print("connected")
+        else
+            print("could not connect:" .. res)
+        end
+    end
+end
+
+local function initialize(onParentStart, onParentEvent, server, msgHanlder)
+    isServer = server
+    messageHandler = msgHanlder
+    -- start cryptoNet event loop
+    cryptoNet.startEventLoop(onParentStart, onParentEvent)
 end
 
 return {
@@ -135,10 +263,15 @@ return {
     getBalance = getBalance,
     request = bankRequest,
     randomString = randomString,
-    receive_modem = receive_modem,
-    modem = modem,
+    --receive_modem = receive_modem,
+    onEvent = onEvent,
+    onStart = onStart,
+    respond = respond,
     coins = coins,
     initialize = initialize,
     getUUID = getUUID,
+    setUUID = setUUID,
+    trimErr = trimErr,
+    printErr = printErr,
     logging = logging
 }
