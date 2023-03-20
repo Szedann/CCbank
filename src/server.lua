@@ -1,32 +1,13 @@
-local modem = peripheral.find("modem") or error("No modem attached", 0)
+local bank = require("bankApi")
 local storageDrive = peripheral.wrap("back")
 local cardDrive = peripheral.wrap("right")
-local pingInterval = 5 * 60
-local UUIDFile = "info"
-local bank = {}
+--local pingInterval = 5 * 60
 local users = {}
 local ATMs = {}
 
-local port = 421
-
-modem.open(port)
-redstone.setAnalogOutput("bottom", 15)
-
-print("Server started on port " .. port)
-
--- Define the currency conversion rates
-local rates = {
-    spurs = 1 / 64,
-    bevels = 1 / 8,
-    sprockets = 1 / 4,
-    cogs = 1,
-    crowns = 8,
-    suns = 64
-}
-
 -- Helper function to convert between currencies
 local function convert(amount, from, to)
-    return amount * rates[from] / rates[to]
+    return amount * bank.coins[from].rate / bank.coins[to].rate
 end
 
 -- Load the user database
@@ -64,15 +45,15 @@ end
 
 -- generate unique IDs
 local function genUUID(atmID)
-    ts = os.time(os.date("!*t"))
-    UUID = atmID .. ts
+    local ts = os.time(os.date("!*t"))
+    local UUID = atmID .. ts
     UUID = string.format("%x", tonumber(UUID))
     return UUID
 end
 
 
 -- Function to register a new user
-function bank.registerUser(name, atmID)
+local function registerUser(name, atmID)
     if (#name > 16) then
         return error("Name too long")
     end
@@ -95,10 +76,7 @@ function bank.registerUser(name, atmID)
     cardDrive.setDiskLabel(name .. "'s card")
 
     -- write card ID to card
-    local UUIDPath = cardDrive.getMountPath()
-    local file = fs.open("/" .. UUIDPath .. "/" .. UUIDFile, "w")
-    file.write(cardID)
-    file.close()
+    bank.setUUID(cardDrive, cardID)
 
     -- output card
     redstone.setAnalogOutput("bottom", 0)
@@ -111,12 +89,12 @@ function bank.registerUser(name, atmID)
 end
 
 -- Function to get a user's balance
-function bank.getBalance(cardID)
+local function getBalance(cardID)
     return users[cardID].balance
 end
 
 -- Function to handle an incoming deposit
-function bank.deposit(name, amount, cardID)
+local function deposit(name, amount, cardID)
     local user = users[cardID]
     if user.name ~= name then
         error("Incorrect Card")
@@ -128,7 +106,7 @@ function bank.deposit(name, amount, cardID)
 end
 
 -- Function to handle an incoming withdrawal
-function bank.withdraw(name, amount, cardID)
+local function withdraw(name, amount, cardID)
     print(name, amount, cardID)
     local user = users[cardID]
     if user.name ~= name then
@@ -143,41 +121,17 @@ function bank.withdraw(name, amount, cardID)
 end
 
 -- Function to handle incoming alerts
-function bank.alert(message)
-    local color = term.getTextColor()
-    term.setTextColor(colors.red)
-
-    print(message)
-
-    -- restore text color
-    term.setTextColor(color)
+local function alert(message)
+    bank.printErr(message)
 end
 
-function trimErr(err)
-    -- trim beginning "location data" from system error message
-    trimIndex = string.find(err, ': ', 1, true)
-    if (trimIndex) then
-        err = string.sub(err, trimIndex + 2)
-    end
-    return err
+local function registerATM(id, status)
+    ATMs[id] = { id = id, status = status }
+    print("Registered ATM " .. id)
 end
 
-function printErr(err)
-    -- save current color and change text to red: error text
-    local color = term.getTextColor()
-    term.setTextColor(colors.red)
-
-    print(err)
-
-    -- restore text color
-    term.setTextColor(color)
-end
-
-local function registerATM(id, port, status)
-    ATMs[id] = { id = id, port = tonumber(port), status = status }
-    print("Registered ATM " .. id .. " on port " .. port)
-end
-
+-- not needed as we now use cryptoNet to handle inccoming requests
+--[[
 local function receive_modem(e)
     event, side, channel, replyChannel, message, distance = table.unpack(e)
     print(event, side, channel, replyChannel, message, distance)
@@ -191,60 +145,58 @@ local function receive_modem(e)
     local data = textutils.unserialize(serialized) or {}
     print("Received command: " .. command .. " args: " .. table.concat(data, ", "))
     return event, side, channel, replyChannel, command, data, id
-end
+end]]
+--
 
-local function handleModemRequest(e)
-    local _, _, channel, replyChannel, command, data, id = receive_modem(e)
+local function handleRequest(id, command, data)
     local function respond(message)
-        message.responseTo = data.messageID
-        modem.transmit(replyChannel, channel, textutils.serialize(message))
+        bank.respond(message, data)
     end
     if command == "register" then
-        local status, res = pcall(bank.registerUser, data.name, id)
-
+        local status, res = pcall(registerUser, data.name, id)
         if (status) then
-            respond({ status = "success" })
+            respond({ status = "success", name = data.name })
         else
-            printErr(res)
-            respond({ status = "error", message = trimErr(res) })
+            bank.printErr(res)
+            respond({ status = "error", name = data.name, message = bank.trimErr(res) })
         end
     elseif command == "balance" then
-        local status, res = pcall(bank.getBalance, data.cardID)
+        local status, res = pcall(getBalance, data.cardID)
         if (status) then
             respond({ status = "success", balance = res })
         else
-            printErr(res)
-            respond({ status = "error", message = trimErr(res) })
+            bank.printErr(res)
+            respond({ status = "error", message = bank.trimErr(res) })
         end
     elseif command == "deposit" then
         if not ATMs[id] then
-            respond { status = "error", message = "ATM not registered" }
+            respond({ status = "error", message = "ATM not registered" })
         end
-        local status, res = pcall(bank.deposit, data.name, data.amount, data.cardID)
+        local status, res = pcall(deposit, data.name, data.amount, data.cardID)
         if (status) then
             respond({ status = "success" })
         else
-            printErr(res)
-            respond({ status = "error", message = trimErr(res) })
+            bank.printErr(res)
+            respond({ status = "error", message = bank.trimErr(res) })
         end
     elseif command == "withdraw" then
         if not ATMs[id] then
             respond({ status = "error", message = "ATM not registered" })
         end
-        local status, res = pcall(bank.withdraw, data.name, data.amount, data.cardID)
+        local status, res = pcall(withdraw, data.name, data.amount, data.cardID)
         if (status) then
             respond({ status = "success" })
         else
-            printErr(res)
-            respond({ status = "error", message = trimErr(res) })
+            bank.printErr(res)
+            respond({ status = "error", message = bank.trimErr(res) })
         end
     elseif command == "alert" then
         -- alerts could never throw an error (to my knowledge)
-        bank.alert("ATM " .. id .. ": " .. data.message)
-        respond({ status = "success" })
+        alert("ATM " .. id .. ": " .. data.message)
+        respond({ status = "success", message = data.message })
     elseif command == "registerATM" then
         -- registering an ATM could never throw an error (to my knowledge)
-        registerATM(id, data.port, "ONLINE")
+        registerATM(id, "ONLINE")
         respond({ status = "success" })
     elseif command == "search" then
         local status, res = pcall(getUser, data.cardID)
@@ -254,42 +206,83 @@ local function handleModemRequest(e)
                 status = "success",
                 user = {
                     name = res.name,
-                    balance = res.balance
+                    balance = res.balance,
+                    cardID = data.cardID
                 }
             })
         else
-            printErr(res)
+            bank.printErr(res)
             respond({ status = "error", message = "Card not registered." })
         end
     end
 end
+-- net needed as we have a dedicated request hanlder
+-- and all request events are handled by cryptoNet
+--[[
+local function handleModemRequest(e)
+    local _, _, channel, replyChannel, command, data, id = receive_modem(e)
 
+end]]
+--
 
-local PING_TIMER = os.startTimer(pingInterval)
--- Main loop to listen for incoming requests
-while true do
-    local e = { os.pullEvent() }
-    if e[1] == "modem_message" then
-        handleModemRequest(e)
-    elseif e[1] == "timer" and e[2] == PING_TIMER then
-        print("Pinging ATMs")
-        PING_TIMER = os.startTimer(pingInterval)
-        for index, value in pairs(ATMs) do
-            print("Pinging ATM " .. value.id .. " on port " .. value.port)
-            modem.transmit(value.port, port, textutils.serialize({ command = "PING" }))
-            local timeoutTimer = os.startTimer(1)
-            local e2 = { os.pullEvent() }
-            if e2[1] == "timer" and e2[2] == timeoutTimer then
-                value.status = "OFFLINE"
-                bank.alert("ATM " .. value.id .. " is offline")
-            elseif e2[1] == "modem_message" then
-                local _, _, channel, replyChannel, command, data, id = receive_modem(e2)
-                if command == "PONG" then
-                    os.cancelTimer(timeoutTimer)
-                    print("ATM " .. value.id .. " is online")
-                    value.status = "ONLINE"
+local function onEvent(event)
+    -- call api listners first
+    local handled = bank.onEvent(event)
+
+    -- if event wasn't handled, try and handle it
+    if (not handled) then
+
+    end
+    return handled
+end
+
+local function main()
+    redstone.setAnalogOutput("bottom", 15)
+
+    -- run any start methods for the APIs
+    bank.onStart()
+
+    print("Server started...")
+
+    -- Main loop to listen for incoming requests
+    -- main loop no longer need as messages are handled by cryptoNet
+    -- and pings are sent from clients, not requested by server
+    --[[
+    local PING_TIMER = os.startTimer(pingInterval)
+
+    while true do
+        local e = { os.pullEvent() }
+        if e[1] == "modem_message" then
+            handleModemRequest(e)
+        elseif e[1] == "timer" and e[2] == PING_TIMER then
+            print("Pinging ATMs")
+            PING_TIMER = os.startTimer(pingInterval)
+            for index, value in pairs(ATMs) do
+                print("Pinging ATM " .. value.id .. " on port " .. value.port)
+                modem.transmit(value.port, port, textutils.serialize({ command = "PING" }))
+                local timeoutTimer = os.startTimer(1)
+                local e2 = { os.pullEvent() }
+                if e2[1] == "timer" and e2[2] == timeoutTimer then
+                    value.status = "OFFLINE"
+                    bank.alert("ATM " .. value.id .. " is offline")
+                elseif e2[1] == "modem_message" then
+                    local _, _, channel, replyChannel, command, data, id = receive_modem(e2)
+                    if command == "PONG" then
+                        os.cancelTimer(timeoutTimer)
+                        print("ATM " .. value.id .. " is online")
+                        value.status = "ONLINE"
+                    end
                 end
             end
         end
-    end
+    end]]
+    --
 end
+
+
+
+
+-- intialize, passing main and this onEvent function as the entry listener
+-- and pass that this is a server and the server
+-- request handler function
+bank.initialize(main, onEvent, true, handleRequest)
