@@ -149,26 +149,8 @@ local function updateUser()
     bank.getUser(UUID, updateUserCallback)
 end
 
-local amount, coinSlots -- TODO: find a way to not have to use these (see below)
-local function depositCallback(response)
-    if (response.status == "success") then
-        -- update user balance locally
-        currentUser.balance = currentUser.balance + amount
-        for slot, value in pairs(coinSlots) do
-            interfaceStorage.pushItems("back", slot, value.count)
-        end
-        if (bank.logging) then print("Deposited " .. amount .. "C into " .. currentUser.name .. "'s account") end
-        displayMessage("Deposited " .. amount .. "C")
-    else
-        displayMessage("Failed to deposit " .. amount .. "C")
-        if (bank.logging) then print("Failed to deposit " .. amount .. "C into " .. currentUser.name .. "'s account") end
-    end
-    -- reset temp global variables
-    coinSlots = nil
-    amount = nil
-end
-local function deposit(amt)
-    if (bank.logging) then print("Depositing " .. amt .. "C into " .. currentUser.name .. "'s account") end
+local function deposit(amount)
+    if (bank.logging) then print("Depositing " .. amount .. "C into " .. currentUser.name .. "'s account") end
     checkInterfaceStorage()
     -- redundant as countCoins achieves this with extra validation
     --[[if interfaceStorageMoney.total < amount then
@@ -177,56 +159,68 @@ local function deposit(amt)
         return false
     end]]
     --
-    --[[ TODO: find a way to pass this to the callback,
-    without sending it and amount to the server or
-    hainvg this as a global variable]]
-    --
 
-    coinSlots = countCoins(interfaceStorageMoney, amt)
+    local coinSlots = countCoins(interfaceStorageMoney, amount)
     if coinSlots == 0 then
-        if (bank.logging) then print("Not enough coins to make up " .. amt .. "C") end
+        if (bank.logging) then print("Not enough coins to make up " .. amount .. "C") end
         displayMessage("Not enough money in interface storage")
         return
     end
-    amount = amt
     bank.request("deposit", { name = currentUser.name, amount = amount, cardID = currentUser.cardID },
-        depositCallback)
+        function(response)
+            if (response.status == "success") then
+                -- update user balance locally
+                currentUser.balance = currentUser.balance + amount
+                for slot, value in pairs(coinSlots) do
+                    interfaceStorage.pushItems("back", slot, value.count)
+                end
+                if (bank.logging) then print("Deposited " .. amount .. "C into " .. currentUser.name .. "'s account") end
+                displayMessage("Deposited " .. amount .. "C")
+            else
+                displayMessage("Failed to deposit " .. amount .. "C")
+                if (bank.logging) then
+                    print("Failed to deposit " ..
+                        amount .. "C into " .. currentUser.name .. "'s account")
+                end
+            end
+        end
+    )
 end
 
-local function withdrawCallback(response)
-    if (response.status == "success") then
-        -- update user balance locally
-        currentUser.balance = currentUser.balance - amount
-        for slot, value in pairs(coinSlots) do
-            internalStorage.pushItems("front", slot, value.count)
-        end
-        displayMessage("Withdrew " .. amount .. "C")
-        if (bank.logging) then print("Withdrew " .. amount .. "C from " .. currentUser.name .. "'s account") end
-    else
-        displayMessage("Failed to withdraw " .. amount .. "C")
-        if (bank.logging) then print("Failed to withdraw " .. amount .. "C from " .. currentUser.name .. "'s account") end
-    end
-    -- reset temp global variables
-    coinSlots = nil
-    amount = nil
-end
-local function withdraw(amt)
+
+local function withdraw(amount)
     checkInternalStorage()
-    coinSlots = countCoins(internalStorageMoney, amt)
+    local coinSlots = countCoins(internalStorageMoney, amount)
     if (coinSlots == 0) then
         if (bank.logging) then print("Not enough money in internal storage") end
         bank.alertServer("Not enough money in internal storage")
         displayMessage("Not enough money in internal storage")
         return
     end
-    amount = amt
 
-    local response = bank.request("withdraw", { name = currentUser.name, amount = amount, cardID = currentUser.cardID },
-        withdrawCallback)
+    bank.request("withdraw", { name = currentUser.name, amount = amount, cardID = currentUser.cardID },
+        function(response)
+            if (response.status == "success") then
+                -- update user balance locally
+                currentUser.balance = currentUser.balance - amount
+                for slot, value in pairs(coinSlots) do
+                    internalStorage.pushItems("front", slot, value.count)
+                end
+                displayMessage("Withdrew " .. amount .. "C")
+                if (bank.logging) then print("Withdrew " .. amount .. "C from " .. currentUser.name .. "'s account") end
+            else
+                displayMessage("Failed to withdraw " .. amount .. "C")
+                if (bank.logging) then
+                    print("Failed to withdraw " ..
+                        amount .. "C from " .. currentUser.name .. "'s account")
+                end
+            end
+        end
+    )
 end
 
 -- Event driven handler for listening to events
-local withdrawAmountString = ""
+local withdrawAmountString = "0"
 
 local function onEvent(event)
     -- call api listners first
@@ -253,6 +247,8 @@ local function onEvent(event)
                 local x, y = event[3], event[4]
                 if (bank.logging) then print(x, y) end
                 if y == 4 then
+                    ---- remove this
+                    print("depositing " .. interfaceStorageMoney.total)
                     deposit(interfaceStorageMoney.total)
                 elseif y == 5 then
                     screen = "withdraw"
