@@ -39,27 +39,33 @@ os.loadAPI(cryptoNetPath)
 local coins = {
     spurs = {
         nbt = "d3adddbc586c8a708b5e213b206b7687",
-        rate = 1 / 64
+        rate = 1 / 64,
+        letter = "S"
     },
     bevels = {
         nbt = "c9f52ce05acf3715bf592eea6edbc450",
-        rate = 1 / 8
+        rate = 1 / 8,
+        letter = "V"
     },
     sprockets = {
         nbt = "25a3275f9ecdc11c78648e61e95376b0",
-        rate = 1 / 4
+        rate = 1 / 4,
+        letter = "K"
     },
     cogs = {
         nbt = "2442f28a7aec5cf7b09d2c2756caa1a4",
-        rate = 1
+        rate = 1,
+        letter = "C"
     },
     crowns = {
         nbt = "77b458f3adececb55e27a47b4ecb714b",
-        rate = 8
+        rate = 8,
+        letter = "R"
     },
     suns = {
         nbt = "9eabd6c6d7c587c1694fb86d4182cd62",
-        rate = 64
+        rate = 64,
+        letter = "U"
     }
 }
 
