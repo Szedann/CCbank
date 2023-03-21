@@ -19,7 +19,6 @@ if not fs.exists(cryptoNetPath) then
 end
 
 os.loadAPI(cryptoNetPath)
-cryptoNet.setLoggingEnabled(cryptoLogging)
 
 local coins = {
     spurs = {
@@ -247,6 +246,8 @@ end
 local function initialize(onParentStart, onParentEvent, server, msgHanlder)
     isServer = server
     messageHandler = msgHanlder
+    cryptoNet.setLoggingEnabled(cryptoLogging)
+
     -- start cryptoNet event loop
     cryptoNet.startEventLoop(onParentStart, onParentEvent)
 end
@@ -266,5 +267,6 @@ return {
     setUUID = setUUID,
     trimErr = trimErr,
     printErr = printErr,
-    logging = logging
+    logging = logging,
+    cryptoLogging = cryptoLogging
 }
