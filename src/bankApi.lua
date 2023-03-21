@@ -9,6 +9,22 @@ local isServer = false     -- will get set based on parent calls
 local cryptoLogging = true
 local logging = false
 
+local function setCryptoLoggingEnabled(enabled)
+    cryptoLogging = enabled
+end
+
+local function getCryptoLoggingEnabled()
+    return cryptoLogging
+end
+
+local function setLoggingEnabled(enabled)
+    logging = enabled
+end
+
+local function getLoggingEnabled()
+    return logging
+end
+
 -- check for and download needed cryptoNet API
 if not fs.exists(cryptoNetPath) then
     print("can't find " .. cryptoNetPath .. " API file.\nDownloading, please wait...")
@@ -204,7 +220,7 @@ local function onEvent(event)
             local command = table.remove(args, 1)
             local serialized = table.concat(args, " ")
             local data = textutils.unserialize(serialized) or {}
-            if (logging) then print("Received command: " .. command .. " args: " .. table.concat(data, ", ")) end
+            if (logging) then print("Received command: " .. command .. " args: " .. textutils.serialise(data)) end
             -- socket of request sender, use this to respond
             data.socket = event[3]
             -- send message to server handler
@@ -243,9 +259,9 @@ local function onStart()
     end
 end
 
-local function initialize(onParentStart, onParentEvent, server, msgHanlder)
+local function initialize(onParentStart, onParentEvent, server, msgHandler)
     isServer = server
-    messageHandler = msgHanlder
+    messageHandler = msgHandler
     cryptoNet.setLoggingEnabled(cryptoLogging)
 
     -- start cryptoNet event loop
@@ -267,6 +283,8 @@ return {
     setUUID = setUUID,
     trimErr = trimErr,
     printErr = printErr,
-    logging = logging,
-    cryptoLogging = cryptoLogging
+    setLoggingEnabled = setLoggingEnabled,
+    setCryptoLoggingEnabled = setCryptoLoggingEnabled,
+    getLoggingEnabled = getLoggingEnabled,
+    getCryptoLoggingEnabled = getCryptoLoggingEnabled
 }

@@ -5,30 +5,30 @@ local function alertServer(message)
     bank.request("alert", { message = message },
         function(respose)
             if (respose.status == "success") then
-                if (bank.logging) then print("Alerted bank of " .. message) end
+                if (bank.getLoggingEnabled()) then print("Alerted bank of " .. message) end
             else
-                if (bank.logging) then print("Failed to alert bank of " .. message) end
+                if (bank.getLoggingEnabled()) then print("Failed to alert bank of " .. message) end
             end
         end
     )
 end
 
 local function registerATM()
+    if (bank.getLoggingEnabled()) then print("Registering ATM") end
     bank.request("registerATM", {},
         function(response)
             if (response.status == "success") then
-                if (bank.logging) then print("Registered ATM") end
+                if (bank.getLoggingEnabled()) then print("Registered ATM") end
             else
-                if (bank.logging) then print("Failed to register ATM") end
+                if (bank.getLoggingEnabled()) then print("Failed to register ATM") end
             end
         end
     )
 end
 
 local function initialize(onParentStart, onParentEvent)
-    if (bank.logging) then print("Initializing") end
+    if (bank.getLoggingEnabled()) then print("Initializing") end
     bank.initialize(onParentStart, onParentEvent, false)
-    registerATM()
 end
 
 local function onEvent(event)
@@ -64,8 +64,11 @@ return {
     printErr = bank.printErr,
     onEvent = onEvent,
     onStart = bank.onStart,
-    logging = bank.logging,
     coins = bank.coins,
     opMode = opMode,
-    cryptoLogging = bank.cryptoLogging,
+    setLoggingEnabled = bank.setLoggingEnabled,
+    setCryptoLoggingEnabled = bank.setCryptoLoggingEnabled,
+    getLoggingEnabled = bank.getLoggingEnabled,
+    getCryptoLoggingEnabled = bank.getCryptoLoggingEnabled,
+    registerATM = registerATM,
 }

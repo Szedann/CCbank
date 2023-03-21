@@ -92,6 +92,7 @@ end
 local function main()
     -- run any start methods for the APIs
     bank.onStart()
+    bank.registerATM()
 end
 
 -- intialize, passing main and this onEvent function as the entry listener

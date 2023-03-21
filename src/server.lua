@@ -5,6 +5,8 @@ local cardDrive = peripheral.wrap("right")
 local users = {}
 local ATMs = {}
 
+bank.setLoggingEnabled(true)
+
 -- Helper function to convert between currencies
 local function convert(amount, from, to)
     return amount * bank.coins[from].rate / bank.coins[to].rate
@@ -96,6 +98,9 @@ end
 -- Function to handle an incoming deposit
 local function deposit(amount, cardID)
     local user = users[cardID]
+    if (not user) then
+        error("User not found")
+    end
     local balance = users[cardID].balance
     users[cardID].balance = balance + amount
     saveUsers()
@@ -105,6 +110,9 @@ end
 -- Function to handle an incoming withdrawal
 local function withdraw(amount, cardID)
     local user = users[cardID]
+    if (not user) then
+        error("User not found")
+    end
     if user.balance < amount then
         error("Insufficient funds")
     else

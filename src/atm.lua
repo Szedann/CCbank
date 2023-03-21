@@ -3,6 +3,7 @@ local monitor = peripheral.find("monitor") or error("No monitor attached", 0)
 local cardDrive = peripheral.wrap("right")
 local interfaceStorage = peripheral.wrap("front")
 local internalStorage = peripheral.wrap("back")
+bank.setLoggingEnabled(true)
 
 local interfaceStorageMoney = {
     total = 0,
@@ -17,7 +18,7 @@ local currentUser = nil
 
 local function countCoins(tab, amount)
     if ((tab.total or 0) < amount) then
-        if (bank.logging) then print("Not enough money (" .. tab.total .. " < " .. amount .. ")") end
+        if (bank.getLoggingEnabled()) then print("Not enough money (" .. tab.total .. " < " .. amount .. ")") end
         return 0
     end
     if (tab.total == amount) then
@@ -92,7 +93,7 @@ local w, h = monitor.getSize()
 -- call to update UI state
 local function updateUI()
     if screen == "info" then
-        if (bank.logging) then print("Info: " .. DisplayedMessage) end
+        if (bank.getLoggingEnabled()) then print("Info: " .. DisplayedMessage) end
         monitor.clear()
         local wrappedErrorMessageLines = require "cc.strings".wrap(DisplayedMessage, w)
         for i, line in ipairs(wrappedErrorMessageLines) do
@@ -126,7 +127,7 @@ end
 local function displayMessage(message, skip)
     if (skip == nil) then skip = true end -- skip defaults to true if not passed
 
-    if (bank.logging) then print("displaying message: " .. message) end
+    if (bank.getLoggingEnabled()) then print("displaying message: " .. message) end
     screen = "info"
     skipInfo = skip
     DisplayedMessage = message or "Unknown error"
@@ -135,7 +136,7 @@ end
 
 local function updateUser()
     local UUID = bank.getUUID(cardDrive)
-    if (bank.logging) then print(UUID) end
+    if (bank.getLoggingEnabled()) then print(UUID) end
     displayMessage("Reading Card. Please Wait...", false)
     bank.getUser(UUID,
         function(response)
@@ -151,7 +152,7 @@ local function updateUser()
 end
 
 local function deposit(amount)
-    if (bank.logging) then print("Depositing " .. amount .. "C into " .. currentUser.name .. "'s account") end
+    if (bank.getLoggingEnabled()) then print("Depositing " .. amount .. "C into " .. currentUser.name .. "'s account") end
     checkInterfaceStorage()
     -- redundant as countCoins achieves this with extra validation
     --[[if interfaceStorageMoney.total < amount then
@@ -163,11 +164,13 @@ local function deposit(amount)
 
     local coinSlots = countCoins(interfaceStorageMoney, amount)
     if coinSlots == 0 then
-        if (bank.logging) then print("Not enough coins to make up " .. amount .. "C") end
+        if (bank.getLoggingEnabled()) then print("Not enough coins to make up " .. amount .. "C") end
         displayMessage("Not enough money in interface storage")
         return
     end
-    bank.request("deposit", { name = currentUser.name, amount = amount, cardID = currentUser.cardID },
+    print(textutils.serialise(currentUser))
+    displayMessage("Please wait...", false)
+    bank.request("deposit", { amount = amount, cardID = currentUser.cardID },
         function(response)
             if (response.status == "success") then
                 -- update user balance locally
@@ -175,11 +178,14 @@ local function deposit(amount)
                 for slot, value in pairs(coinSlots) do
                     interfaceStorage.pushItems("back", slot, value.count)
                 end
-                if (bank.logging) then print("Deposited " .. amount .. "C into " .. currentUser.name .. "'s account") end
+                if (bank.getLoggingEnabled()) then
+                    print("Deposited " ..
+                        amount .. "C into " .. currentUser.name .. "'s account")
+                end
                 displayMessage("Deposited " .. amount .. "C")
             else
                 displayMessage("Failed to deposit " .. amount .. "C")
-                if (bank.logging) then
+                if (bank.getLoggingEnabled()) then
                     print("Failed to deposit " ..
                         amount .. "C into " .. currentUser.name .. "'s account")
                 end
@@ -193,14 +199,15 @@ local function withdraw(amount)
     checkInternalStorage()
     local coinSlots = countCoins(internalStorageMoney, amount)
     if (coinSlots == 0) then
-        if (bank.logging) then print("Not enough money in internal storage") end
+        if (bank.getLoggingEnabled()) then print("Not enough money in internal storage") end
         bank.alertServer("Not enough money in internal storage")
         displayMessage("Not enough money in internal storage")
         return
     end
-
-    bank.request("withdraw", { name = currentUser.name, amount = amount, cardID = currentUser.cardID },
+    displayMessage("Please wait...", false)
+    bank.request("withdraw", { amount = amount, cardID = currentUser.cardID },
         function(response)
+            print(textutils.serialise(response))
             if (response.status == "success") then
                 -- update user balance locally
                 currentUser.balance = currentUser.balance - amount
@@ -208,10 +215,13 @@ local function withdraw(amount)
                     internalStorage.pushItems("front", slot, value.count)
                 end
                 displayMessage("Withdrew " .. amount .. "C")
-                if (bank.logging) then print("Withdrew " .. amount .. "C from " .. currentUser.name .. "'s account") end
+                if (bank.getLoggingEnabled()) then
+                    print("Withdrew " ..
+                        amount .. "C from " .. currentUser.name .. "'s account")
+                end
             else
                 displayMessage("Failed to withdraw " .. amount .. "C")
-                if (bank.logging) then
+                if (bank.getLoggingEnabled()) then
                     print("Failed to withdraw " ..
                         amount .. "C from " .. currentUser.name .. "'s account")
                 end
@@ -239,7 +249,7 @@ local function onEvent(event)
             screen = "insert"
             updateUI()
         elseif event[1] == "monitor_touch" then
-            if (bank.logging) then print("Touch: " .. screen) end
+            if (bank.getLoggingEnabled()) then print("Touch: " .. screen) end
             if screen == "info" and skipInfo then
                 handled = true
                 -- go back to the main menu only if the user can skip this info
@@ -247,7 +257,7 @@ local function onEvent(event)
             elseif screen == "main" then
                 handled = true
                 local x, y = event[3], event[4]
-                if (bank.logging) then print(x, y) end
+                if (bank.getLoggingEnabled()) then print(x, y) end
                 if y == 4 then
                     ---- remove this
                     print("depositing " .. interfaceStorageMoney.total)
@@ -330,6 +340,7 @@ end
 local function main()
     -- run any start methods for the APIs
     bank.onStart()
+    bank.registerATM()
 end
 
 -- intialize, passing main and this onEvent function as the entry listener

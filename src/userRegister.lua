@@ -22,34 +22,6 @@ local function onEvent(event)
 
     -- if event wasn't handled, try and handle it
     if (not handled) then
-
-    end
-    return handled
-end
-
-local function main()
-    -- run any start methods for the APIs
-    bank.onStart()
-
-    -- setup screen
-    local w, h = term.getSize()
-    term.setBackgroundColor(colors.red)
-    term.setCursorPos(1, 1)
-    term.clearLine()
-    print("Account Creation Terminal")
-    term.setBackgroundColor(colors.black)
-    local window = window.create(term.current(), 1, 2, w, h - 1)
-    term.redirect(window)
-
-    while true do
-        -- polling is no longer required with cryptoNet
-        --[[
-    local e = { os.pullEvent() }
-    if e[1] == "modem_message" then
-        bank.handleModemRequest(e)
-    end]]
-        --
-
         if (prompt) then
             prompt = false
             print("Input account name to register:")
@@ -57,6 +29,23 @@ local function main()
             registerUser(username)
         end
     end
+    return handled
+end
+
+-- setup screen
+local w, h = term.getSize()
+term.setBackgroundColor(colors.red)
+term.setCursorPos(1, 1)
+term.clearLine()
+print("Account Creation Terminal")
+term.setBackgroundColor(colors.black)
+local window = window.create(term.current(), 1, 2, w, h - 1)
+term.redirect(window)
+
+local function main()
+    -- run any start methods for the APIs
+    term.clear()
+    bank.onStart()
 end
 
 -- intialize, passing main and this onEvent function as the entry listener
