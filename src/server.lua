@@ -94,11 +94,8 @@ local function getBalance(cardID)
 end
 
 -- Function to handle an incoming deposit
-local function deposit(name, amount, cardID)
+local function deposit(amount, cardID)
     local user = users[cardID]
-    if user.name ~= name then
-        error("Incorrect Card")
-    end
     local balance = users[cardID].balance
     users[cardID].balance = balance + amount
     saveUsers()
@@ -106,17 +103,24 @@ local function deposit(name, amount, cardID)
 end
 
 -- Function to handle an incoming withdrawal
-local function withdraw(name, amount, cardID)
-    print(name, amount, cardID)
+local function withdraw(amount, cardID)
     local user = users[cardID]
-    if user.name ~= name then
-        error("Incorrect Card")
-    elseif user.balance < amount then
+    if user.balance < amount then
         error("Insufficient funds")
     else
         user.balance = user.balance - amount
         saveUsers()
         return true
+    end
+end
+
+-- Function to handle an incoming transfer
+local function transfer(amount, fromCardID, toCardID)
+    if withdraw(amount, fromCardID) then
+        deposit(amount, toCardID)
+        return true
+    else
+        return false
     end
 end
 
@@ -172,7 +176,7 @@ local function handleRequest(id, command, data)
         if not ATMs[id] then
             respond({ status = "error", message = "ATM not registered" })
         end
-        local status, res = pcall(deposit, data.name, data.amount, data.cardID)
+        local status, res = pcall(deposit, data.amount, data.cardID)
         if (status) then
             respond({ status = "success" })
         else
@@ -183,7 +187,18 @@ local function handleRequest(id, command, data)
         if not ATMs[id] then
             respond({ status = "error", message = "ATM not registered" })
         end
-        local status, res = pcall(withdraw, data.name, data.amount, data.cardID)
+        local status, res = pcall(withdraw, data.amount, data.cardID)
+        if (status) then
+            respond({ status = "success" })
+        else
+            bank.printErr(res)
+            respond({ status = "error", message = bank.trimErr(res) })
+        end
+    elseif command == "transfer" then
+        if not ATMs[id] then
+            respond({ status = "error", message = "ATM not registered" })
+        end
+        local status, res = pcall(transfer, data.amount, data.fromCardID, data.toCardID)
         if (status) then
             respond({ status = "success" })
         else

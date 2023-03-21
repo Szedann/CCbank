@@ -66,5 +66,6 @@ return {
     onStart = bank.onStart,
     logging = bank.logging,
     coins = bank.coins,
-    opMode = opMode
+    opMode = opMode,
+    cryptoLogging = bank.cryptoLogging,
 }
