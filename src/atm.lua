@@ -201,15 +201,32 @@ local function deposit(amount)
 end
 
 
-local function withdraw(amount)
+local function withdraw(amount, coinTypes)
     checkInternalStorage()
-    local coinSlots = countCoins(internalStorageMoney, amount)
+    local tab = {
+        total = 0,
+        detail = {}
+    }
+    if (coinTypes) then
+        for slot, coin in pairs(internalStorageMoney.detail) do
+            for index, value in ipairs(coinTypes) do
+                if (value == bank.coins[coin.coin]) then
+                    tab.detail[slot] = coin
+                    tab.total = tab.total + coin.count * bank.coins[coin.coin].rate
+                end
+            end
+        end
+    else
+        tab = internalStorageMoney
+    end
+    local coinSlots = countCoins(tab, amount)
     if (coinSlots == 0) then
         if (bank.getLoggingEnabled()) then print("Not enough money in internal storage") end
         bank.alertServer("Not enough money in internal storage")
         displayMessage("Not enough money in internal storage")
         return
     end
+    print(textutils.serialise(coinSlots))
     displayMessage("Please wait...", false)
     bank.request("withdraw", { amount = amount, cardID = currentUser.cardID },
         function(response)
@@ -238,12 +255,7 @@ end
 
 -- Event driven handler for listening to events
 local withdrawAmountString = "0"
-local spurCnt = 9999
-local bevelCnt = 9999
-local sprocketCnt = 9999
-local cogCnt = 9999
-local crownCnt = 9999
-local sunCnt = 9999
+local withdrawCoinType = nil
 --[[
 Spurs
 beVels
@@ -251,7 +263,125 @@ sprocKets
 Cogs
 cRowns
 sUns]]
-local withdraw
+local function withdrawScreen()
+    if (string.len(withdrawAmountString) == 0) then
+        withdrawAmountString = "0"
+    end
+    monitor.clear()
+    monitor.setCursorPos(1, 1)
+    monitor.write("Withdraw")
+    monitor.setCursorPos(1, 2)
+    local letter = "C"
+    if withdrawCoinType then
+        letter = withdrawCoinType.letter
+    end
+    monitor.write("Amount: " .. withdrawAmountString .. letter)
+    if withdrawCoinType then
+        monitor.setCursorPos(1, 3)
+        monitor.setTextColor(colors.lightGray)
+        monitor.write("= " .. math.floor(tonumber(withdrawAmountString) * withdrawCoinType.rate * 100) / 100 .. "C")
+        monitor.setTextColor(colors.white)
+    end
+    local iteration = 0
+    for index, coin in pairs(bank.coins) do
+        monitor.setCursorPos(3 + iteration, 4)
+        iteration = iteration + 2
+        if coin == withdrawCoinType then
+            monitor.setTextColor(colors.black)
+            monitor.setBackgroundColor(colors.white)
+        else
+            monitor.setBackgroundColor(colors.black)
+        end
+        monitor.write(coin.letter)
+        monitor.setTextColor(colors.white)
+        monitor.setBackgroundColor(colors.black)
+    end
+    monitor.setCursorPos(5, 5)
+    monitor.setBackgroundColor(colors.lightGray)
+    monitor.setTextColor(colors.black)
+    monitor.write(" 1 2 3 ")
+    monitor.setCursorPos(5, 6)
+    monitor.write(" 4 5 6 ")
+    monitor.setCursorPos(5, 7)
+    monitor.write(" 7 8 9 ")
+    monitor.setCursorPos(5, 8)
+    monitor.write(" 0 < x ")
+    monitor.setCursorPos(1, 10)
+    monitor.setBackgroundColor(colors.white)
+    monitor.write("Accept   Cancel")
+    monitor.setBackgroundColor(colors.black)
+    monitor.setTextColor(colors.white)
+end
+
+local function handleWithdrawTouch(x, y)
+    local optionGrid = {}
+    optionGrid[5] = {}
+    optionGrid[5][6] = "num_1"
+    optionGrid[5][8] = "num_2"
+    optionGrid[5][10] = "num_3"
+    optionGrid[6] = {}
+    optionGrid[6][6] = "num_4"
+    optionGrid[6][8] = "num_5"
+    optionGrid[6][10] = "num_6"
+    optionGrid[7] = {}
+    optionGrid[7][6] = "num_7"
+    optionGrid[7][8] = "num_8"
+    optionGrid[7][10] = "num_9"
+    optionGrid[8] = {}
+    optionGrid[8][6] = "num_0"
+    optionGrid[8][8] = "backspace"
+    optionGrid[8][10] = "clear"
+
+    local iteration = 0
+    optionGrid[4] = {}
+    for coin, data in pairs(bank.coins) do
+        optionGrid[4][3 + iteration] = "coin_" .. coin
+        iteration = iteration + 2
+    end
+
+    local optionY = optionGrid[y]
+    if (optionY) then
+        option = optionY[x]
+        if (not option) then
+            return
+        end
+        if (string.sub(option, 1, 4) == "num_") then
+            local num = string.sub(option, 5)
+            if (withdrawAmountString == "0") then
+                withdrawAmountString = num
+            else
+                withdrawAmountString = withdrawAmountString .. num
+            end
+        elseif option == "backspace" then
+            withdrawAmountString = string.sub(withdrawAmountString, 1, string.len(withdrawAmountString) - 1) or "0"
+        elseif option == "clear" then
+            withdrawAmountString = "0"
+        elseif (string.sub(option, 1, 5) == "coin_") then
+            local coin = string.sub(option, 6)
+            print("coin: " .. coin)
+            withdrawCoinType = bank.coins[coin]
+        end
+    end
+    if (y == 10) then
+        if (x < 8) then
+            local actualAmount = tonumber(withdrawAmountString)
+            if withdrawCoinType then
+                actualAmount = actualAmount * withdrawCoinType.rate
+            end
+            withdraw(actualAmount, { withdrawCoinType })
+            withdrawAmountString = "0"
+            withdrawCoinType = nil
+        else
+            screen = "main"
+            withdrawAmountString = "0"
+            withdrawCoinType = nil
+        end
+    end
+    if (screen == "withdraw") then
+        withdrawScreen()
+    end
+end
+
 local function onEvent(event)
     -- if there was a change to the total in the interface
     if (checkInterfaceStorage()) then
@@ -287,117 +417,13 @@ local function onEvent(event)
                     deposit(interfaceStorageMoney.total)
                 elseif y == 5 then
                     screen = "withdraw"
-                    monitor.clear()
-                    monitor.setCursorPos(1, 1)
-                    monitor.write("Withdraw")
-                    monitor.setCursorPos(1, 2)
-                    monitor.write("Amount:")
-                    monitor.setCursorPos(1, 3)
-                    monitor.write((tonumber(withdrawAmountString) or 0) .. "C")
-
-                    monitor.setCursorPos(7, 5)
-                    monitor.write("S")
-                    monitor.setCursorPos(7, 6)
-                    monitor.write(tostring(spurCnt))
-
-                    monitor.setCursorPos(7, 7)
-                    monitor.write("V")
-                    monitor.setCursorPos(7, 8)
-                    monitor.write(tostring(bevelCnt))
-
-                    monitor.setCursorPos(7, 9)
-                    monitor.write("K")
-                    monitor.setCursorPos(7, 10)
-                    monitor.write(tostring(sprocketCnt))
-
-                    monitor.setCursorPos(12, 5)
-                    monitor.write("C")
-                    monitor.setCursorPos(12, 6)
-                    monitor.write(tostring(cogCnt))
-
-                    monitor.setCursorPos(12, 7)
-                    monitor.write("W")
-                    monitor.setCursorPos(12, 8)
-                    monitor.write(tostring(crownCnt))
-
-                    monitor.setCursorPos(12, 9)
-                    monitor.write("U")
-                    monitor.setCursorPos(12, 10)
-                    monitor.write(tostring(sunCnt))
-
-                    monitor.setBackgroundColor(colors.gray)
-                    monitor.setCursorPos(8, 5)
-                    monitor.write("<>")
-                    monitor.setCursorPos(8, 7)
-                    monitor.write("<>")
-                    monitor.setCursorPos(8, 9)
-                    monitor.write("<>")
-                    monitor.setCursorPos(13, 5)
-                    monitor.write("<>")
-                    monitor.setCursorPos(13, 7)
-                    monitor.write("<>")
-                    monitor.setCursorPos(13, 9)
-                    monitor.write("<>")
-                    monitor.setCursorPos(10, 1)
-                    monitor.write("Cancel")
-                    monitor.setCursorPos(9, 2)
-                    monitor.write("Confirm")
-                    monitor.setCursorPos(1, 6)
-                    monitor.write("1 2 3")
-                    monitor.setCursorPos(1, 7)
-                    monitor.write("4 5 6")
-                    monitor.setCursorPos(1, 8)
-                    monitor.write("7 8 9")
-                    monitor.setCursorPos(1, 9)
-                    monitor.write("0 < x")
-                    monitor.setBackgroundColor(colors.black)
+                    withdrawScreen()
                     withdrawAmountString = "0"
                 end
             elseif screen == "withdraw" then
                 handled = true
                 local x, y = event[3], event[4]
-
-                if y == 5 then
-                    withdraw(tonumber(withdrawAmountString))
-                    withdrawAmountString = "0"
-                end
-                print(x, y)
-                if y == 7 then
-                    if x == 1 then
-                        withdrawAmountString = withdrawAmountString .. "1"
-                    elseif x == 3 then
-                        withdrawAmountString = withdrawAmountString .. "2"
-                    elseif x == 5 then
-                        withdrawAmountString = withdrawAmountString .. "3"
-                    end
-                elseif y == 8 then
-                    if x == 1 then
-                        withdrawAmountString = withdrawAmountString .. "4"
-                    elseif x == 3 then
-                        withdrawAmountString = withdrawAmountString .. "5"
-                    elseif x == 5 then
-                        withdrawAmountString = withdrawAmountString .. "6"
-                    end
-                elseif y == 9 then
-                    if x == 1 then
-                        withdrawAmountString = withdrawAmountString .. "7"
-                    elseif x == 3 then
-                        withdrawAmountString = withdrawAmountString .. "8"
-                    elseif x == 5 then
-                        withdrawAmountString = withdrawAmountString .. "9"
-                    end
-                elseif y == 10 then
-                    if x == 1 then
-                        withdrawAmountString = withdrawAmountString .. "0"
-                    elseif x == 3 then
-                        withdrawAmountString = withdrawAmountString:sub(1, -2)
-                    elseif x == 5 then
-                        withdrawAmountString = ""
-                    end
-                end
-                monitor.setCursorPos(1, 3)
-                monitor.clearLine()
-                monitor.write((tonumber(withdrawAmountString) or 0) .. "C")
+                handleWithdrawTouch(x, y)
             end
             updateUI()
         end
