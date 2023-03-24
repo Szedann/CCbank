@@ -368,7 +368,11 @@ local function handleWithdrawTouch(x, y)
             if withdrawCoinType then
                 actualAmount = actualAmount * withdrawCoinType.rate
             end
-            withdraw(actualAmount, { withdrawCoinType })
+            if (withdrawCoinType) then
+                withdraw(actualAmount, { withdrawCoinType })
+            else
+                withdraw(actualAmount)
+            end
             withdrawAmountString = "0"
             withdrawCoinType = nil
         else
