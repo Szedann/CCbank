@@ -53,6 +53,14 @@ local function genUUID(atmID)
     return UUID
 end
 
+local function getUsernames()
+    local userTable = {}
+    for key, user in pairs(users) do
+        table.insert(userTable, user.name)
+    end
+    return userTable
+end
+
 
 -- Function to register a new user
 local function registerUser(name, atmID)
@@ -176,6 +184,14 @@ local function handleRequest(id, command, data)
         local status, res = pcall(getBalance, data.cardID)
         if (status) then
             respond({ status = "success", balance = res })
+        else
+            bank.printErr(res)
+            respond({ status = "error", message = bank.trimErr(res) })
+        end
+    elseif command == "getUsers" then
+        local status, res = pcall(getUsernames)
+        if (status) then
+            respond({ status = "success", users = res })
         else
             bank.printErr(res)
             respond({ status = "error", message = bank.trimErr(res) })
