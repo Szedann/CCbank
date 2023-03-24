@@ -13,7 +13,7 @@ local function alertServer(message)
     )
 end
 
-local function registerATM()
+local function registerATM(callback)
     if (bank.getLoggingEnabled()) then print("Registering ATM") end
     bank.request("registerATM", {},
         function(response)
@@ -22,6 +22,7 @@ local function registerATM()
             else
                 if (bank.getLoggingEnabled()) then print("Failed to register ATM") end
             end
+            if (callback) then callback(response.status == "success") end
         end
     )
 end
