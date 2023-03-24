@@ -78,9 +78,9 @@ do -- [0-9a-zA-Z]
     for c = 97, 122 do table.insert(charset, string.char(c)) end
 end
 
+math.randomseed(os.clock() ^ 5)
 local function randomString(length)
     if not length or length <= 0 then return '' end
-    math.randomseed(os.clock() ^ 5)
     return randomString(length - 1) .. charset[math.random(1, #charset)]
 end
 
@@ -99,27 +99,6 @@ local function bankRequest(command, data, callback)
     end
     data.messageID = id
     cryptoNet.send(socket, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
-
-    -- And wait for a reply
-    --[[local event, side, channel, replyChannel, message, distance
-    local data
-    if not expectResponse then
-        return
-    end
-    local timeoutTimer = os.startTimer(5)
-    repeat
-        local e = { os.pullEvent() }
-
-        if e[1] == "timer" and e[2] == timeoutTimer then
-            error("Bank request timed out")
-        elseif e[1] == "modem_message" then
-            event, side, channel, replyChannel, message, distance = table.unpack(e)
-            if (logging) then print(event, side, channel, replyChannel, message, distance) end
-            data = textutils.unserialize(message)
-        end
-    until channel == responsePort and replyChannel == bankPort and data.responseTo == id
-    return data]]
-    --
 end
 
 local function getBalance()
@@ -136,8 +115,9 @@ local function getBalance()
 end
 
 local function getUser(UUID, callback)
-    if (not UUID or not callback) then
-        callback(nil)
+    if (not UUID) then
+        if (logging) then print("No UUID provided") end
+        if (callback) then callback(nil) end
     end
     bankRequest("search", { cardID = UUID },
         function(response)
@@ -145,6 +125,7 @@ local function getUser(UUID, callback)
                 if (logging) then print("Error: " .. (response.message or "Unknown")) end
                 callback(nil)
             else
+                if (logging) then print("Found user: " .. response.user.name) end
                 callback({
                     name = response.user.name,
                     balance = response.user.balance,
