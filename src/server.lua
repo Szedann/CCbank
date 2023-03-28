@@ -53,10 +53,13 @@ local function genUUID(atmID)
     return UUID
 end
 
-local function getUsernames()
+local function getUsers()
     local userTable = {}
     for key, user in pairs(users) do
-        table.insert(userTable, user.name)
+        table.insert(userTable, {
+            name = user.name,
+            UUID = key,
+        })
     end
     return userTable
 end
@@ -189,7 +192,7 @@ local function handleRequest(id, command, data)
             respond({ status = "error", message = bank.trimErr(res) })
         end
     elseif command == "getUsers" then
-        local status, res = pcall(getUsernames)
+        local status, res = pcall(getUsers)
         if (status) then
             respond({ status = "success", users = res })
         else

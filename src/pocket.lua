@@ -1,7 +1,8 @@
 local bank = require("atmBankApi")
+local completion = require "cc.completion"
 local UUIDPath = "info"
 
-bank.setLoggingEnabled(true)
+bank.setLoggingEnabled(false)
 bank.setCryptoLoggingEnabled(true)
 
 local user = nil
@@ -71,25 +72,77 @@ local function getUsers(callback)
     )
 end
 
-local recipient = nil
 local recipientList = {}
 local function transferScreen()
+    mainWindow.clear()
+    mainWindow.setCursorPos(1, 1)
     print("       ==TRANSFER==")
-    if not recipient then
-        if not recipientList then
-            getUsers(function(response)
-                recipientList = response
-                transferScreen()
-            end)
-        end
+    if table.getn(recipientList) < 1 then
+        print("Loading recipient list...")
+        getUsers(function(response)
+            recipientList = response.users
+            if (table.getn(recipientList) <= 0) then
+                print("No recipients found.")
+                screen = "main"
+                return
+            else
+                updateUI()
+            end
+        end)
+    else
         print("Select a recipient:")
-        for i, v in pairs(recipientList) do
-            print(i .. ": " .. v.name)
+        print("0: Cancel")
+        for i, user in pairs(recipientList) do
+            print(i .. ": " .. user.name)
+        end
+        local input = tonumber(read())
+        local recipient = nil
+        if input == 0 then
+            screen = "main"
+        elseif input > 0 and input <= table.getn(recipientList) then
+            recipient = recipientList[input]
+        else
+            print("Invalid input")
+        end
+        print("Recipient selected: " .. recipient.name)
+        print("Input amount (c)")
+        local amount = tonumber(read())
+        mainWindow.clear()
+        mainWindow.setCursorPos(1, 1)
+        print("Confirm transfer:")
+        print("Recipient: " .. recipient.name)
+        print("Amount: " .. amount .. "c")
+        local confirmation = read(nil, nil, function(text) return completion.choice(text, { "yes", "no" }) end)
+        mainWindow.clear()
+        mainWindow.setCursorPos(1, 1)
+        if confirmation == "yes" then
+            bank.request("transfer", { fromCardID = UUID, toCardID = recipient.UUID, amount = amount },
+                function(response)
+                    if response.status == "success" then
+                        print("Transferred " .. amount .. " to " .. recipient.name .. ".")
+                    else
+                        print("Failed to transfer " .. amount .. " to " .. recipient.name .. ".")
+                    end
+                    print("Press any key to continue...")
+                    os.sleep(1)
+                    os.pullEvent("key")
+                    screen = "main"
+                    updateUI()
+                    updateUser()
+                    recipient = nil
+                    recipientList = {}
+                end)
+        else
+            screen = "main"
+            recipient = nil
+            recipientList = {}
+            updateUI()
         end
     end
 end
 
-local function updateUser(callback)
+
+function updateUser(callback)
     if (bank.logging) then print(UUID) end
     displayMessage("Reading Card. Please Wait...", false)
     bank.getUser(UUID,
@@ -106,7 +159,8 @@ local function updateUser(callback)
     )
 end
 
-local function updateUI()
+function updateUI()
+    mainWindow.clear()
     if screen == "transfer" then
         transferScreen()
     end
@@ -126,6 +180,7 @@ local function onEvent(event)
             if y == h then
                 if x < 6 then
                     screen = "transfer"
+                    updateUI()
                 end
             end
             if screen == "info" and skipInfo then
@@ -135,11 +190,13 @@ local function onEvent(event)
             elseif screen == "main" then
             end
             updateUserUI()
-            updateUI()
         end
     end
     return handled
 end
+
+userInfoWindow.setCursorPos(1, 1)
+userInfoWindow.write("Loading...")
 
 local function main()
     -- run any start methods for the APIs
