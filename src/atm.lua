@@ -176,14 +176,32 @@ local function deposit(amount)
     end
     print(textutils.serialise(currentUser))
     displayMessage("Please wait...", false)
+
+    local totalDeposited = 0
+    for slot, value in pairs(coinSlots) do
+        local movedAmount = interfaceStorage.pushItems("back", slot, value.count)
+        totalDeposited = totalDeposited + movedAmount * bank.coins[value.coin].rate
+    end
+    print(totalDeposited)
+    if (totalDeposited ~= amount) then
+        checkInternalStorage()
+
+        if (bank.getLoggingEnabled()) then
+            print("Failed to deposit " ..
+                amount .. "C into " .. currentUser.name .. "'s account")
+        end
+        displayMessage("Unable to move coins, internal storage may be full")
+        local slots = countCoins(internalStorageMoney, totalDeposited)
+        for slot, value in pairs(slots) do
+            interfaceStorage.pullItems("back", slot, value.count)
+        end
+        return
+    end
     bank.request("deposit", { amount = amount, cardID = currentUser.cardID },
         function(response)
             if (response.status == "success") then
                 -- update user balance locally
                 currentUser.balance = currentUser.balance + amount
-                for slot, value in pairs(coinSlots) do
-                    interfaceStorage.pushItems("back", slot, value.count)
-                end
                 if (bank.getLoggingEnabled()) then
                     print("Deposited " ..
                         amount .. "C into " .. currentUser.name .. "'s account")
