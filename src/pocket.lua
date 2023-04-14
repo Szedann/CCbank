@@ -24,7 +24,7 @@ screenSelectWindow.setBackgroundColor(colors.orange)
 screenSelectWindow.setTextColor(colors.white)
 screenSelectWindow.setCursorPos(2, 1)
 screenSelectWindow.write(" TRANSFER ")
-screenSelectWindow.setCursorPos(14, 1)
+screenSelectWindow.setCursorPos(15, 1)
 screenSelectWindow.write(" CURRENCY ")
 
 -- main window
@@ -39,8 +39,6 @@ local function updateUserUI()
         userInfoWindow.write("Welcome, " .. user.name)
         userInfoWindow.setCursorPos(1, 2)
         userInfoWindow.write("Balance: " .. user.balance .. "C")
-        userInfoWindow.setCursorPos(1, 3)
-        userInfoWindow.write("--coming soon--")
         userInfoWindow.setCursorPos(1, 4)
         userInfoWindow.write(string.rep("=", userInfoWindowW))
         userInfoWindow.setBackgroundColor(colors.orange)
@@ -52,12 +50,6 @@ local function updateUserUI()
         userInfoWindow.setCursorPos(1, 1)
         userInfoWindow.write("Couldn't find user")
     end
-end
-
--- Function to display a message on the monitor
-local function displayMessage(message, skip)
-    print(message)
-    updateUserUI()
 end
 
 local function getUsers(callback)
@@ -73,11 +65,11 @@ local function transferScreen()
     mainWindow.clear()
     mainWindow.setCursorPos(1, 1)
     print("       ==TRANSFER==")
-    if table.getn(recipientList) < 1 then
+    if #recipientList < 1 then
         print("Loading recipient list...")
         getUsers(function(response)
             recipientList = response.users
-            if (table.getn(recipientList) <= 0) then
+            if (#recipientList <= 0) then
                 print("No recipients found.")
                 screen = "main"
                 return
@@ -87,27 +79,44 @@ local function transferScreen()
         end)
     else
         print("Select a recipient:")
-        print("0: Cancel")
-        for i, user in pairs(recipientList) do
-            print(i .. ": " .. user.name)
+        local names = {}
+        for i, v in ipairs(recipientList) do
+            names[i] = v.name
         end
-        local input = tonumber(read())
+        local input = read(nil, nil, function(text) return completion.choice(text, names) end)
         local recipient = nil
-        if input == 0 then
-            screen = "main"
-        elseif input > 0 and input <= table.getn(recipientList) then
-            recipient = recipientList[input]
-        else
-            print("Invalid input")
+        for i, v in ipairs(recipientList) do
+            if v.name == input then
+                recipient = v
+                break
+            end
         end
+        if recipient == nil then
+            screen = "main"
+            updateUI()
+            print("Invalid recipient.")
+            return
+        end
+        mainWindow.clear()
+        mainWindow.setCursorPos(1, 1)
         print("Recipient selected: " .. recipient.name)
         print("Input amount (c)")
         local amount = tonumber(read())
+        if (amount == nil or amount <= 0) then
+            screen = "main"
+            updateUI()
+            print("Invalid amount.")
+            return
+        end
         mainWindow.clear()
         mainWindow.setCursorPos(1, 1)
         print("Confirm transfer:")
         print("Recipient: " .. recipient.name)
         print("Amount: " .. amount .. "c")
+        print("")
+        mainWindow.setTextColor(colors.orange)
+        print("Confirm? (yes/no)")
+        mainWindow.setTextColor(colors.white)
         local confirmation = read(nil, nil, function(text) return completion.choice(text, { "yes", "no" }) end)
         mainWindow.clear()
         mainWindow.setCursorPos(1, 1)
@@ -115,11 +124,14 @@ local function transferScreen()
             bank.request("transfer", { fromCardID = UUID, toCardID = recipient.UUID, amount = amount },
                 function(response)
                     if response.status == "success" then
+                        mainWindow.setTextColor(colors.green)
                         print("Transferred " .. amount .. " to " .. recipient.name .. ".")
                     else
+                        mainWindow.setTextColor(colors.red)
                         print("Failed to transfer " .. amount .. " to " .. recipient.name .. ".")
                     end
-                    print("Press any key to continue...")
+                    mainWindow.setTextColor(colors.white)
+                    print("\nPress any key to continue...")
                     os.sleep(1)
                     os.pullEvent("key")
                     screen = "main"
@@ -133,6 +145,7 @@ local function transferScreen()
             recipient = nil
             recipientList = {}
             updateUI()
+            print("Transfer cancelled.")
         end
     end
 end
@@ -140,12 +153,12 @@ end
 
 function updateUser(callback)
     if (bank.logging) then print(UUID) end
-    displayMessage("Reading Card. Please Wait...", false)
+    print("Reading Card. Please Wait...")
     bank.getUser(UUID,
         function(response)
             user = response
             if not user then
-                displayMessage("Invalid card. Please remove card and insert a valid card.", false)
+                print("Invalid card.")
             else
                 screen = "main"
             end
@@ -153,10 +166,12 @@ function updateUser(callback)
             if (callback) then callback() end
         end
     )
+    updateUI()
 end
 
 function updateUI()
     mainWindow.clear()
+    mainWindow.setCursorPos(1, 1)
     if screen == "transfer" then
         transferScreen()
     end
@@ -174,7 +189,7 @@ local function onEvent(event)
             local x, y = event[3], event[4]
             if (bank.logging) then print("Touch: " .. screen) end
             if y == h then
-                if x < 6 then
+                if x < 13 then
                     screen = "transfer"
                     updateUI()
                 end

@@ -135,6 +135,9 @@ end
 
 -- Function to handle an incoming transfer
 local function transfer(amount, fromCardID, toCardID)
+    if amount <= 0 then
+        error("Invalid amount")
+    end
     if withdraw(amount, fromCardID) then
         deposit(amount, toCardID)
         return true
