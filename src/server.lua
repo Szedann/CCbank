@@ -90,6 +90,7 @@ local function registerUser(name, atmID)
 
     -- write card ID to card
     bank.setUUID(cardDrive, cardID)
+    fs.copy("/pocket/", cardDrive.getMountPath() .. "/startup")
 
     -- output card
     redstone.setAnalogOutput("bottom", 0)

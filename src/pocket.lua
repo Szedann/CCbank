@@ -3,7 +3,7 @@ local completion = require "cc.completion"
 local UUIDPath = "info"
 
 bank.setLoggingEnabled(false)
-bank.setCryptoLoggingEnabled(true)
+bank.setCryptoLoggingEnabled(false)
 
 local user = nil
 local UUID = fs.open("/" .. UUIDPath, "r").readAll()
