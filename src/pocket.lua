@@ -209,6 +209,11 @@ end
 userInfoWindow.setCursorPos(1, 1)
 userInfoWindow.write("Loading...")
 
+local function onDisconnect()
+    mainWindow.clear()
+    print("Disconnected... Trying to reconnect...")
+end
+
 local function main()
     -- run any start methods for the APIs
     bank.onStart()
@@ -221,4 +226,4 @@ local function main()
 end
 
 -- intialize, passing main and this onEvent function as the entry listener
-bank.initialize(main, onEvent)
+bank.initialize(main, onEvent, onDisconnect)

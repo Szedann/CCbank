@@ -27,9 +27,9 @@ local function registerATM(callback)
     )
 end
 
-local function initialize(onParentStart, onParentEvent)
+local function initialize(onParentStart, onParentEvent, onDisconnect)
     if (bank.getLoggingEnabled()) then print("Initializing") end
-    bank.initialize(onParentStart, onParentEvent, false)
+    bank.initialize(onParentStart, onParentEvent, false, nil, onDisconnect)
 end
 
 local function onEvent(event)
@@ -38,7 +38,15 @@ local function onEvent(event)
 
     -- if event wasn't handled, try and handle it
     if (not handled) then
+        -- hand events that don't need connection
 
+        -- check if we are connected
+        if (bank.isConnected()) then
+            -- handle event that need connection
+        elseif (not handled) then
+            -- don't pass up the event if we are not connected
+            handled = true
+        end
     end
     return handled
 end
@@ -71,5 +79,6 @@ return {
     setCryptoLoggingEnabled = bank.setCryptoLoggingEnabled,
     getLoggingEnabled = bank.getLoggingEnabled,
     getCryptoLoggingEnabled = bank.getCryptoLoggingEnabled,
+    isConnected = bank.isConnected,
     registerATM = registerATM,
 }

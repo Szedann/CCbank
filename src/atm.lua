@@ -453,6 +453,11 @@ local function onEvent(event)
     return handled
 end
 
+local function onDisconnect()
+    displayMessage("Cannot reach Server... Please wait...", false)
+    print("Disconnected... Trying to reconnect...")
+end
+
 local function main()
     -- run any start methods for the APIs
     bank.onStart()
@@ -463,4 +468,4 @@ local function main()
 end
 
 -- intialize, passing main and this onEvent function as the entry listener
-bank.initialize(main, onEvent)
+bank.initialize(main, onEvent, onDisconnect)

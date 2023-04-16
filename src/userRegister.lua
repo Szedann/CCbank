@@ -1,8 +1,10 @@
 local bank = require("atmBankApi")
+bank.setCryptoLoggingEnabled(false)
 local prompt = true -- set to true when terminal should prompt user
 
 local function registerUser(name)
-    bank.request("register", { name = name },
+    if (bank.isConnected()) then
+        bank.request("register", { name = name },
         function(response)
             if (response.status == "success") then
                 print("Registered user " .. name)
@@ -14,6 +16,12 @@ local function registerUser(name)
             prompt = true;
         end
     )
+    else
+        print("Failed to register user " .. name)
+        -- prompt user for another registration
+        -- once connection established
+        prompt = true;
+    end
 end
 
 local function onEvent(event)
@@ -42,11 +50,17 @@ term.setBackgroundColor(colors.black)
 local window = window.create(term.current(), 1, 2, w, h - 1)
 term.redirect(window)
 
+local function onDisconnect()
+    term.clear()
+    print("Disconnected... Trying to reconnect...")
+end
+
 local function main()
     -- run any start methods for the APIs
     term.clear()
+    print("Connecting to Server...")
     bank.onStart()
 end
 
 -- intialize, passing main and this onEvent function as the entry listener
-bank.initialize(main, onEvent)
+bank.initialize(main, onEvent, onDisconnect)

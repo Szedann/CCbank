@@ -3,11 +3,18 @@ local cryptoNetPath = "cryptoNet"
 local cryptoNetURL = "https://raw.githubusercontent.com/SiliconSloth/CryptoNet/master/cryptoNet.lua"
 local serverName = "BANK - Server"
 local socket = nil
-local callbacks = {}       -- functions to call after getting a response
-local messageHandler = nil -- handles responding to message received
-local isServer = false     -- will get set based on parent calls
+local callbacks = {}          -- functions to call after getting a response
+local messageHandler = nil    -- handles responding to message received
+local disconnectHandler = nil -- called when disconnected
+local connected = false
+local isServer = false        -- will get set based on parent calls
 local cryptoLogging = true
 local logging = false
+local reconnectTime = 5 -- how to long to wait (in seconds) before retrying failed connection
+
+local function isConnected()
+    return connected
+end
 
 local function setCryptoLoggingEnabled(enabled)
     cryptoLogging = enabled
@@ -93,12 +100,16 @@ end
 
 -- currently sends message from client to server
 local function bankRequest(command, data, callback)
-    local id = randomString(8)
-    if (callback) then -- if we have a callback
-        callbacks[id] = callback
+    if (isConnected()) then
+        local id = randomString(8)
+        if (callback) then -- if we have a callback
+            callbacks[id] = callback
+        end
+        data.messageID = id
+        cryptoNet.send(socket, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
+    elseif (callback) then
+        callback(nil)
     end
-    data.messageID = id
-    cryptoNet.send(socket, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
 end
 
 local function getBalance()
@@ -187,6 +198,28 @@ local function getUUID(cardDrive)
     return cardID
 end
 
+local function onStart()
+    if (isServer) then
+        -- Start the server
+        cryptoNet.host(serverName)
+    else
+        local status, res = false
+        while (not status) do
+            -- connect to server
+            status, res = pcall(cryptoNet.connect, serverName)
+            if (logging) then
+                print("could not connect:" .. trimErr(res))
+                print("retrying in " .. reconnectTime .. " seconds...")
+            end
+            sleep(reconnectTime)
+        end
+
+        socket = res
+        connected = true
+        print("connected")
+    end
+end
+
 -- Runs every time an event occurs
 local function onEvent(event)
     --print(event[1])
@@ -194,7 +227,17 @@ local function onEvent(event)
     -- Received a message from the server
     if event[1] == "connection_closed" then
         -- close socket
+        connected = false
         cryptoNet.close(event[2])
+
+        -- if we are a client, try to reconnect
+        if (not server) then
+            -- call the disconnectHandler
+            if (disconnectHandler ~= nil) then
+                disconnectHandler()
+            end
+            onStart()
+        end
     elseif event[1] == "encrypted_message" then
         handled = true
         local args = {}
@@ -230,23 +273,7 @@ local function onEvent(event)
     return handled
 end
 
-local function onStart()
-    if (isServer) then
-        -- Start the server
-        cryptoNet.host(serverName)
-    else
-        -- connect to server
-        local status, res = pcall(cryptoNet.connect, serverName)
-        if (status) then
-            socket = res
-            print("connected")
-        else
-            print("could not connect:" .. res)
-        end
-    end
-end
-
-local function initialize(onParentStart, onParentEvent, server, msgHandler)
+local function initialize(onParentStart, onParentEvent, server, msgHandler, onDisconnect)
     isServer = server
     messageHandler = msgHandler
     cryptoNet.setLoggingEnabled(cryptoLogging)
@@ -273,5 +300,6 @@ return {
     setLoggingEnabled = setLoggingEnabled,
     setCryptoLoggingEnabled = setCryptoLoggingEnabled,
     getLoggingEnabled = getLoggingEnabled,
-    getCryptoLoggingEnabled = getCryptoLoggingEnabled
+    getCryptoLoggingEnabled = getCryptoLoggingEnabled,
+    isConnected = isConnected
 }
