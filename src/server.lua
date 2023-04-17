@@ -23,6 +23,9 @@ local clientTypes = {
         }
     }
 }
+-- CLient id assigned to clientTypes Example
+clientTypes[1] = "register"
+
 local fileList = {
     "userRegister.lua",
     "bankApi.lua",
@@ -220,13 +223,13 @@ local function updateCheck(id, files)
     end
 
     -- get client type
-    --local type = clientTypes[id]
+    local type = clientTypes[id]
 
     -- get files to compare based on client type
-    if (true) then
+    if (type) then
         updateFiles = {}
         local updated = true
-        local compareFilenames = clientTypes.types["atm"]
+        local compareFilenames = clientTypes.types[type]
         -- comare files
         for _, filename in ipairs(compareFilenames) do
             if (localFiles[filename] ~= files[filename]) then
