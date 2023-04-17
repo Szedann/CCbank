@@ -2,8 +2,37 @@ local bank = require("bankApi")
 local storageDrive = peripheral.wrap("back")
 local cardDrive = peripheral.wrap("right")
 --local pingInterval = 5 * 60
+local clientTypeFile = "clientTypes"
+-- files needed for each client type
+local clientTypes = {
+    types = {
+        pocket = {
+            "bankApi.lua",
+            "atmBankApi.lua",
+            "pocket.lua"
+        },
+        atm = {
+            "bankApi.lua",
+            "atmBankApi.lua",
+            "atm.lua"
+        },
+        register = {
+            "bankApi.lua",
+            "atmBankApi.lua",
+            "userRegister.lua"
+        }
+    }
+}
+local fileList = {
+    "userRegister.lua",
+    "bankApi.lua",
+    "atmBankApi.lua",
+    "atm.lua",
+    "pocket.lua"
+}
 local users = {}
 local ATMs = {}
+local localFiles = {}
 
 bank.setLoggingEnabled(true)
 
@@ -152,9 +181,87 @@ local function alert(message)
     bank.printErr(message)
 end
 
-local function registerATM(id, status)
-    ATMs[id] = { id = id, status = status }
-    print("Registered ATM " .. id)
+local function loadFile(filename)
+    local file = fs.open("/" .. filename, "r")
+    local fileData
+    if (file) then
+        fileData = file.readAll()
+        file.close()
+    end
+    return fileData
+end
+local function getUpdatedFiles()
+    -- check for updates
+
+    -- load client type list
+    local clientTypesData = loadFile(clientTypeFile)
+
+    -- if no client type data, write base types to server
+    if (not clientTypesData) then
+        local file = fs.open(clientTypeFile, "w")
+        file.write(textutils.serialize(clientTypes))
+        file.close()
+    else
+        -- load data
+        clientTypes = clientTypes
+    end
+
+    -- load all local updated files
+    for _, filename in ipairs(fileList) do
+        local fileData = loadFile(filename)
+        localFiles[filename] = fileData
+    end
+end
+
+local function updateCheck(id, files)
+    -- files defaults to an empty table
+    if (files == nil) then
+        files = {}
+    end
+
+    -- get client type
+    --local type = clientTypes[id]
+
+    -- get files to compare based on client type
+    if (true) then
+        updateFiles = {}
+        local updated = true
+        local compareFilenames = clientTypes.types["atm"]
+        -- comare files
+        for _, filename in ipairs(compareFilenames) do
+            if (localFiles[filename] ~= files[filename]) then
+                updated = false
+                updateFiles[filename] = localFiles[filename]
+            end
+        end
+        -- if no updates
+        if (updated) then
+            -- return nil, there are no updates
+            return nil
+        else
+            -- reutrn files
+            return updateFiles
+        end
+    else
+        -- client not recognized
+        return -1
+    end
+end
+
+local function registerATM(id, status, files)
+    -- check for updates
+    local updateFiles = updateCheck(id, files)
+
+    -- if there are no files to update
+    if (updateFiles == nil) then
+        -- allow client to register
+        ATMs[id] = { id = id, status = status }
+        print("Registered ATM " .. id)
+    else
+        -- deny client registration
+        ATMs[id] = nil
+    end
+    return updateFiles
 end
 
 -- not needed as we now use cryptoNet to handle inccoming requests
@@ -241,8 +348,28 @@ local function handleRequest(id, command, data)
         alert("ATM " .. id .. ": " .. data.message)
         respond({ status = "success" })
     elseif command == "registerATM" then
-        -- registering an ATM could never throw an error (to my knowledge)
-        registerATM(id, "ONLINE")
+        -- registering an ATM might throw an error during updates
+        local status, res = pcall(registerATM, id, "ONLINE", data.files)
+        if (status) then
+            -- check if there are files
+            if (res) then
+                -- reject registration
+                if (res == -1) then
+                    -- client not recognized
+                    respond({ status = "unknown" })
+                else
+                    -- updates, send back files
+                    respond({ status = "updates", files = res })
+                end
+            else
+                -- send back success
+                respond({ status = "success" })
+            end
+        else
+            bank.printErr(res)
+            respond({ status = "error", message = bank.trimErr(res) })
+        end
+
         respond({ status = "success" })
     elseif command == "search" then
         local status, res = pcall(getUser, data.cardID)
@@ -283,6 +410,9 @@ end
 
 local function main()
     redstone.setAnalogOutput("bottom", 15)
+
+    -- get updated files
+    getUpdatedFiles()
 
     -- run any start methods for the APIs
     bank.onStart()
