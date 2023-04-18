@@ -217,11 +217,22 @@ end
 local function main()
     -- run any start methods for the APIs
     bank.onStart()
-    bank.registerATM(function()
-        updateUser(function()
-            mainWindow.clear()
-            screen = "main"
-        end)
+    print("Connecting to Server...")
+    bank.registerATM({
+        "atmBankApi.lua",
+        "bankApi.lua",
+        "userRegister.lua"
+    }, function(status)
+        if (status == "updates") then
+            print("Updating Card...")
+        elseif (status == "unknown") then
+            print("Card not Registered. Please contact support.")
+        elseif (status == "success") then
+            updateUser(function()
+                mainWindow.clear()
+                screen = "main"
+            end)
+        end
     end)
 end
 

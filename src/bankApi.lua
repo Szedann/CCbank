@@ -112,6 +112,22 @@ local function bankRequest(command, data, callback)
     end
 end
 
+local function writeFile(filepath, fileData)
+    local file = fs.open(filepath, "w")
+    file.write(textutils.serialize(fileData))
+    file.close()
+end
+
+local function loadFile(filename)
+    local file = fs.open("/" .. filename, "r")
+    local fileData
+    if (file) then
+        fileData = file.readAll()
+        file.close()
+    end
+    return fileData
+end
+
 local function getBalance()
     bankRequest("balance", { cardID = currentUser.cardID },
         function(response)
@@ -160,6 +176,13 @@ local function receive_modem(e)
     return event, side, channel, replyChannel, data
 end]]
 --
+
+local function stopServer()
+    if (isServer) then
+        cryptoNet.closeAll()
+    end
+end
+
 
 local function trimErr(err)
     -- trim beginning "location data" from system error message
@@ -231,9 +254,13 @@ local function onEvent(event)
         cryptoNet.close(event[2])
 
         -- if we are a client, try to reconnect
-        if (not server) then
+        if (not isServer) then
+            --if (logging) then
+            print("disconnected")
+            --end
+
             -- call the disconnectHandler
-            if (disconnectHandler ~= nil) then
+            if (disconnectHandler) then
                 disconnectHandler()
             end
             onStart()
@@ -276,6 +303,7 @@ end
 local function initialize(onParentStart, onParentEvent, server, msgHandler, onDisconnect)
     isServer = server
     messageHandler = msgHandler
+    disconnectHandler = onDisconnect
     cryptoNet.setLoggingEnabled(cryptoLogging)
 
     -- start cryptoNet event loop
@@ -297,6 +325,9 @@ return {
     setUUID = setUUID,
     trimErr = trimErr,
     printErr = printErr,
+    loadFile = loadFile,
+    writeFile = writeFile,
+    stopServer = stopServer,
     setLoggingEnabled = setLoggingEnabled,
     setCryptoLoggingEnabled = setCryptoLoggingEnabled,
     getLoggingEnabled = getLoggingEnabled,

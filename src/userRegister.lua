@@ -1,21 +1,21 @@
 local bank = require("atmBankApi")
 bank.setCryptoLoggingEnabled(false)
-local prompt = true -- set to true when terminal should prompt user
+local prompt = false -- set to true when terminal should prompt user
 
 local function registerUser(name)
     if (bank.isConnected()) then
         bank.request("register", { name = name },
-        function(response)
-            if (response.status == "success") then
-                print("Registered user " .. name)
-            else
-                print("Failed to register user " .. name)
-                print(response.message)
+            function(response)
+                if (response.status == "success") then
+                    print("Registered user " .. name)
+                else
+                    print("Failed to register user " .. name)
+                    print(response.message)
+                end
+                -- prompt user for another registration
+                prompt = true;
             end
-            -- prompt user for another registration
-            prompt = true;
-        end
-    )
+        )
     else
         print("Failed to register user " .. name)
         -- prompt user for another registration
@@ -60,6 +60,19 @@ local function main()
     term.clear()
     print("Connecting to Server...")
     bank.onStart()
+    bank.registerATM({
+        "atmBankApi.lua",
+        "bankApi.lua",
+        "atm.lua"
+    }, function(status)
+        if (status == "updates") then
+            print("Updating...")
+        elseif (status == "unknown") then
+            print("Terminal not Registered. Please contact support.")
+        elseif (status == "success") then
+            prompt = true;
+        end
+    end)
 end
 
 -- intialize, passing main and this onEvent function as the entry listener

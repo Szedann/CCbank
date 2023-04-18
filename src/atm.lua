@@ -463,8 +463,21 @@ local function main()
     bank.onStart()
     -- initalize UI
     monitor.setTextScale(0.5)
+    displayMessage("Connecting to Server...", false)
     updateUI()
-    bank.registerATM()
+    bank.registerATM({
+        "atmBankApi.lua",
+        "bankApi.lua",
+        "atm.lua"
+    }, function(status)
+        if (status == "updates") then
+            displayMessage("Updating...", false)
+        elseif (status == "unknown") then
+            displayMessage("ATM not Registered. Please contact support.", false)
+        elseif (status == "success") then
+            screen = "insert"
+        end
+    end)
 end
 
 -- intialize, passing main and this onEvent function as the entry listener

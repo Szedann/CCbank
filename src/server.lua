@@ -1,6 +1,8 @@
+-- os.pullEvent = os.pullEventRaw -- catches termination events
 local bank = require("bankApi")
 local storageDrive = peripheral.wrap("back")
 local cardDrive = peripheral.wrap("right")
+
 --local pingInterval = 5 * 60
 local clientTypeFile = "clientTypes"
 -- files needed for each client type
@@ -24,8 +26,8 @@ local clientTypes = {
     }
 }
 -- CLient id assigned to clientTypes Example
-clientTypes[1] = "register"
-
+clientTypes["1"] = "register"
+clientTypes["6"] = "register"
 local fileList = {
     "userRegister.lua",
     "bankApi.lua",
@@ -37,7 +39,8 @@ local users = {}
 local ATMs = {}
 local localFiles = {}
 
-bank.setLoggingEnabled(true)
+bank.setLoggingEnabled(false)
+bank.setCryptoLoggingEnabled(false)
 
 -- Helper function to convert between currencies
 local function convert(amount, from, to)
@@ -184,34 +187,24 @@ local function alert(message)
     bank.printErr(message)
 end
 
-local function loadFile(filename)
-    local file = fs.open("/" .. filename, "r")
-    local fileData
-    if (file) then
-        fileData = file.readAll()
-        file.close()
-    end
-    return fileData
-end
+
 local function getUpdatedFiles()
     -- check for updates
 
     -- load client type list
-    local clientTypesData = loadFile(clientTypeFile)
+    --local clientTypesData = bank.loadFile(clientTypeFile)
 
     -- if no client type data, write base types to server
     if (not clientTypesData) then
-        local file = fs.open(clientTypeFile, "w")
-        file.write(textutils.serialize(clientTypes))
-        file.close()
+        bank.writeFile(clientTypeFile, clientTypes)
     else
         -- load data
-        clientTypes = clientTypes
+        clientTypes = clientTypesData
     end
 
     -- load all local updated files
     for _, filename in ipairs(fileList) do
-        local fileData = loadFile(filename)
+        local fileData = bank.loadFile(filename)
         localFiles[filename] = fileData
     end
 end
@@ -226,17 +219,19 @@ local function updateCheck(id, files)
     local type = clientTypes[id]
 
     -- get files to compare based on client type
-    if (type) then
+    if (type ~= nil) then
         updateFiles = {}
         local updated = true
         local compareFilenames = clientTypes.types[type]
         -- comare files
         for _, filename in ipairs(compareFilenames) do
             if (localFiles[filename] ~= files[filename]) then
+                print("not Updated")
                 updated = false
                 updateFiles[filename] = localFiles[filename]
             end
         end
+
         -- if no updates
         if (updated) then
             -- return nil, there are no updates
@@ -253,7 +248,13 @@ end
 
 local function registerATM(id, status, files)
     -- check for updates
-    local updateFiles = updateCheck(id, files)
+    local stat, res = pcall(updateCheck, id, files)
+    local updateFiles
+    if (stat) then
+        updateFiles = res
+    else
+        bank.printErr(res)
+    end
 
     -- if there are no files to update
     if (updateFiles == nil) then
@@ -290,6 +291,9 @@ local function handleRequest(id, command, data)
         bank.respond(message, data)
     end
     if command == "register" then
+        if not ATMs[id] then
+            respond({ status = "error", message = "Not logged In, Invalid Client" })
+        end
         local status, res = pcall(registerUser, data.name, id)
         if (status) then
             respond({ status = "success" })
@@ -298,6 +302,9 @@ local function handleRequest(id, command, data)
             respond({ status = "error", message = bank.trimErr(res) })
         end
     elseif command == "balance" then
+        if not ATMs[id] then
+            respond({ status = "error", message = "Not logged In, Invalid Client" })
+        end
         local status, res = pcall(getBalance, data.cardID)
         if (status) then
             respond({ status = "success", balance = res })
@@ -306,6 +313,9 @@ local function handleRequest(id, command, data)
             respond({ status = "error", message = bank.trimErr(res) })
         end
     elseif command == "getUsers" then
+        if not ATMs[id] then
+            respond({ status = "error", message = "Not logged In, Invalid Client" })
+        end
         local status, res = pcall(getUsers)
         if (status) then
             respond({ status = "success", users = res })
@@ -315,7 +325,7 @@ local function handleRequest(id, command, data)
         end
     elseif command == "deposit" then
         if not ATMs[id] then
-            respond({ status = "error", message = "ATM not registered" })
+            respond({ status = "error", message = "Not logged In, Invalid Client" })
         end
         local status, res = pcall(deposit, data.amount, data.cardID)
         if (status) then
@@ -326,7 +336,7 @@ local function handleRequest(id, command, data)
         end
     elseif command == "withdraw" then
         if not ATMs[id] then
-            respond({ status = "error", message = "ATM not registered" })
+            respond({ status = "error", message = "Not logged In, Invalid Client" })
         end
         local status, res = pcall(withdraw, data.amount, data.cardID)
         if (status) then
@@ -337,7 +347,7 @@ local function handleRequest(id, command, data)
         end
     elseif command == "transfer" then
         if not ATMs[id] then
-            respond({ status = "error", message = "ATM not registered" })
+            respond({ status = "error", message = "Not logged In, Invalid Client" })
         end
         local status, res = pcall(transfer, data.amount, data.fromCardID, data.toCardID)
         if (status) then
@@ -372,9 +382,10 @@ local function handleRequest(id, command, data)
             bank.printErr(res)
             respond({ status = "error", message = bank.trimErr(res) })
         end
-
-        respond({ status = "success" })
     elseif command == "search" then
+        if not ATMs[id] then
+            respond({ status = "error", message = "Not logged In, Invalid Client" })
+        end
         local status, res = pcall(getUser, data.cardID)
         if status then
             print("Found user " .. res.name)
@@ -406,7 +417,12 @@ local function onEvent(event)
 
     -- if event wasn't handled, try and handle it
     if (not handled) then
-
+        if event[1] == "terminate" then
+            handled = true
+            print("terminating...")
+            -- close all sockets
+            bank.stopServer()
+        end
     end
     return handled
 end

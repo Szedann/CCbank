@@ -13,16 +13,40 @@ local function alertServer(message)
     )
 end
 
-local function registerATM(callback)
+local function registerATM(fileList, callback)
     if (bank.getLoggingEnabled()) then print("Registering ATM") end
-    bank.request("registerATM", {},
+
+    -- package local files
+    local localFiles = {}
+
+    local fileData
+    for _, filename in ipairs(fileList) do
+        fileData = bank.loadFile(filename)
+        localFiles[filename] = fileData
+    end
+
+    print("Checking for Updates...")
+    bank.request("registerATM", { files = localFiles },
         function(response)
             if (response.status == "success") then
                 if (bank.getLoggingEnabled()) then print("Registered ATM") end
+            elseif (response.status == "updates") then
+                local files = response.files
+                -- tell parent we are updating
+                if (callback) then callback(response.status) end
+                if (bank.getLoggingEnabled()) then print("updating ATM") end
+                -- overwrite existing files with updates
+                for filename, file in ipairs(files) do
+                    writeFile(filename, file)
+                end
+
+                -- reboot
+                os.reboot()
             else
                 if (bank.getLoggingEnabled()) then print("Failed to register ATM") end
             end
-            if (callback) then callback(response.status == "success") end
+            -- send back response to parent
+            if (callback) then callback(response.status) end
         end
     )
 end
@@ -80,5 +104,7 @@ return {
     getLoggingEnabled = bank.getLoggingEnabled,
     getCryptoLoggingEnabled = bank.getCryptoLoggingEnabled,
     isConnected = bank.isConnected,
+    loadFile = bank.loadFile,
+    writeFile = bank.writeFile,
     registerATM = registerATM,
 }
