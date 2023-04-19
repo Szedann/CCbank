@@ -1,5 +1,8 @@
 local bank = require("bankApi")
 local opMode = false
+local reconnectTimer
+local reconnectTime = 5
+local onReconnect;
 
 local function alertServer(message)
     bank.request("alert", { message = message },
@@ -51,9 +54,26 @@ local function registerATM(fileList, callback)
     )
 end
 
+local function handleRequest(id, command, data)
+    -- hearbeat from server
+    if (command == "beat") then
+        -- reset reconnect timer, -- should be started on a different thread
+        reconnectTimer = os.startTimer(reconnectTime)
+    end
+end
+
+-- handles connection to server then starts heart bat timer
+local function onStart()
+    bank.onStart()
+
+    -- we are connected, start timer
+    reconnectTimer = os.startTimer(reconnectTime)
+end
+
 local function initialize(onParentStart, onParentEvent, onDisconnect)
     if (bank.getLoggingEnabled()) then print("Initializing") end
-    bank.initialize(onParentStart, onParentEvent, false, nil, onDisconnect)
+    onReconnect = onDisconnect
+    bank.initialize(onParentStart, onParentEvent, false, handleRequest, onDisconnect)
 end
 
 local function onEvent(event)
@@ -62,7 +82,17 @@ local function onEvent(event)
 
     -- if event wasn't handled, try and handle it
     if (not handled) then
-        -- hand events that don't need connection
+        -- handle events that don't need connection
+        if event[1] == "timer" and event[2] == reconnectTimer then
+            handled = true
+            -- no hearbeat from server in enough time
+            -- try to close connection and reconnect
+            print("reconnect!")
+            --bank.closeAllConnections()
+
+            -- pass disconnection to parent
+            --onReconnect()
+        end
 
         -- check if we are connected
         if (bank.isConnected()) then
@@ -96,7 +126,7 @@ return {
     trimErr = bank.trimErr,
     printErr = bank.printErr,
     onEvent = onEvent,
-    onStart = bank.onStart,
+    onStart = onStart,
     coins = bank.coins,
     opMode = opMode,
     setLoggingEnabled = bank.setLoggingEnabled,

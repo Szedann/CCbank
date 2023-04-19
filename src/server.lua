@@ -2,6 +2,8 @@
 local bank = require("bankApi")
 local storageDrive = peripheral.wrap("back")
 local cardDrive = peripheral.wrap("right")
+local beatTimer
+local beatTime = 3
 
 --local pingInterval = 5 * 60
 local clientTypeFile = "clientTypes"
@@ -420,11 +422,19 @@ local function onEvent(event)
 
     -- if event wasn't handled, try and handle it
     if (not handled) then
-        if event[1] == "terminate" then
+        if event[1] == "timer" and event[2] == beatTimer then
+            handled = true
+            -- time to braodcase another heartbeat
+            print("beat")
+            bank.broadcast("beat")
+
+            -- reset timer
+            beatTimer = os.startTimer(beatTime)
+        elseif event[1] == "terminate" then
             handled = true
             print("terminating...")
             -- close all sockets
-            bank.stopServer()
+            bank.closeAllConnections()
         end
     end
     return handled
@@ -441,6 +451,8 @@ local function main()
 
     print("Server started...")
 
+    -- start a beat timer
+    beatTimer = os.startTimer(beatTime)
     -- Main loop to listen for incoming requests
     -- main loop no longer need as messages are handled by cryptoNet
     -- and pings are sent from clients, not requested by server

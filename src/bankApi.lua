@@ -3,6 +3,7 @@ local cryptoNetPath = "cryptoNet"
 local cryptoNetURL = "https://raw.githubusercontent.com/SiliconSloth/CryptoNet/master/cryptoNet.lua"
 local serverName = "BANK - Server"
 local socket = nil
+local clients = {}
 local callbacks = {}          -- functions to call after getting a response
 local messageHandler = nil    -- handles responding to message received
 local disconnectHandler = nil -- called when disconnected
@@ -116,6 +117,14 @@ local function bankRequest(command, data, callback)
     end
 end
 
+local function broadcast(command, data)
+    if (isServer) then
+        for socket, _ in pairs(clients) do
+            print("client found")
+        end
+    end
+end
+
 local function writeFile(filepath, fileData)
     local file = fs.open(filepath, "w")
     file.write(fileData)
@@ -181,10 +190,8 @@ local function receive_modem(e)
 end]]
 --
 
-local function stopServer()
-    if (isServer) then
-        cryptoNet.closeAll()
-    end
+local function closeAllConnections()
+    cryptoNet.closeAll()
 end
 
 local function trimErr(err)
@@ -251,7 +258,14 @@ local function onEvent(event)
     --print(event[1])
     local handled = false
     -- Received a message from the server
-    if event[1] == "connection_closed" then
+    if event[1] == "connection_opened" and isServer then
+        handled = true
+        print("client joined")
+
+        -- add to clents list
+        clients[event[2]] = 0
+    elseif event[1] == "connection_closed" then
+        handled = true
         -- close socket
         connected = false
         cryptoNet.close(event[2])
@@ -266,13 +280,17 @@ local function onEvent(event)
             if (disconnectHandler) then
                 disconnectHandler()
             end
-            onStart()
+        else
+            print("client left")
+            -- remove from clients list
+            clients[event[2]] = nil
         end
     elseif event[1] == "encrypted_message" then
         handled = true
 
         local data = textutils.unserialize(event[2])
-        if (isServer) then
+        -- check if this is not a response
+        if (not data.responseTo) then
             -- uppack message request
             local id = tostring(data.id)
             local command = data.command
@@ -327,7 +345,8 @@ return {
     printErr = printErr,
     loadFile = loadFile,
     writeFile = writeFile,
-    stopServer = stopServer,
+    broadcast = broadcast,
+    closeAllConnections = closeAllConnections,
     setLoggingEnabled = setLoggingEnabled,
     setCryptoLoggingEnabled = setCryptoLoggingEnabled,
     getLoggingEnabled = getLoggingEnabled,

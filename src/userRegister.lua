@@ -54,9 +54,27 @@ term.setBackgroundColor(colors.black)
 local window = window.create(term.current(), 1, 2, w, h - 1)
 term.redirect(window)
 
+local function registerATMCallback(status)
+    if (status == "updates") then
+        print("Updating...")
+    elseif (status == "unknown") then
+        print("Terminal not Registered. Please contact support.")
+    elseif (status == "success") then
+        prompt = true;
+        promptUser()
+    end
+end
+
 local function onDisconnect()
     term.clear()
+    term.setCursorPos(1, 1)
     print("Disconnected... Trying to reconnect...")
+    bank.onStart()
+    bank.registerATM({
+        "atmBankApi.lua",
+        "bankApi.lua",
+        "userRegister.lua"
+    }, registerATMCallback)
 end
 
 local function main()
@@ -68,16 +86,7 @@ local function main()
         "atmBankApi.lua",
         "bankApi.lua",
         "userRegister.lua"
-    }, function(status)
-        if (status == "updates") then
-            print("Updating...")
-        elseif (status == "unknown") then
-            print("Terminal not Registered. Please contact support.")
-        elseif (status == "success") then
-            prompt = true;
-            promptUser()
-        end
-    end)
+    }, registerATMCallback)
 end
 
 -- intialize, passing main and this onEvent function as the entry listener
