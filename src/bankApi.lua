@@ -106,7 +106,11 @@ local function bankRequest(command, data, callback)
             callbacks[id] = callback
         end
         data.messageID = id
-        cryptoNet.send(socket, os.getComputerID() .. " " .. command .. " " .. textutils.serialize(data))
+        data.mesData = textutils.serialise(data)
+        data.id = os.getComputerID()
+        data.command = command
+
+        cryptoNet.send(socket, textutils.serialize(data))
     elseif (callback) then
         callback(nil)
     end
@@ -114,7 +118,7 @@ end
 
 local function writeFile(filepath, fileData)
     local file = fs.open(filepath, "w")
-    file.write(textutils.serialize(fileData))
+    file.write(fileData)
     file.close()
 end
 
@@ -182,7 +186,6 @@ local function stopServer()
         cryptoNet.closeAll()
     end
 end
-
 
 local function trimErr(err)
     -- trim beginning "location data" from system error message
@@ -267,24 +270,21 @@ local function onEvent(event)
         end
     elseif event[1] == "encrypted_message" then
         handled = true
-        local args = {}
-        for arg in string.gmatch(event[2], "%S+") do
-            table.insert(args, arg)
-        end
+
+        local data = textutils.unserialize(event[2])
         if (isServer) then
             -- uppack message request
-            local id = table.remove(args, 1)
-            local command = table.remove(args, 1)
-            local serialized = table.concat(args, " ")
-            local data = textutils.unserialize(serialized) or {}
+            local id = tostring(data.id)
+            local command = data.command
+            local data = textutils.unserialise(data.mesData)
+            --local data = textutils.unserialize(serialized) or {}
+
             if (logging) then print("Received command: " .. command .. " args: " .. textutils.serialise(data)) end
             -- socket of request sender, use this to respond
             data.socket = event[3]
             -- send message to server handler
             messageHandler(id, command, data)
         else
-            -- unpack message response
-            local data = textutils.unserialize(table.concat(args, " ")) or {}
             if (logging) then print("got message: " .. data.responseTo) end
             -- check for a response callback
             if (callbacks[data.responseTo]) then

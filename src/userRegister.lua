@@ -24,18 +24,22 @@ local function registerUser(name)
     end
 end
 
+local function promptUser()
+    if (prompt) then
+        prompt = false
+        print("Input account name to register:")
+        local username = io.stdin:read()
+        registerUser(username)
+    end
+end
+
 local function onEvent(event)
     -- call api listners first
     local handled = bank.onEvent(event)
 
     -- if event wasn't handled, try and handle it
     if (not handled) then
-        if (prompt) then
-            prompt = false
-            print("Input account name to register:")
-            local username = io.stdin:read()
-            registerUser(username)
-        end
+        promptUser()
     end
     return handled
 end
@@ -63,7 +67,7 @@ local function main()
     bank.registerATM({
         "atmBankApi.lua",
         "bankApi.lua",
-        "atm.lua"
+        "userRegister.lua"
     }, function(status)
         if (status == "updates") then
             print("Updating...")
@@ -71,6 +75,7 @@ local function main()
             print("Terminal not Registered. Please contact support.")
         elseif (status == "success") then
             prompt = true;
+            promptUser()
         end
     end)
 end

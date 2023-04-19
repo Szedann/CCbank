@@ -36,8 +36,8 @@ local function registerATM(fileList, callback)
                 if (callback) then callback(response.status) end
                 if (bank.getLoggingEnabled()) then print("updating ATM") end
                 -- overwrite existing files with updates
-                for filename, file in ipairs(files) do
-                    writeFile(filename, file)
+                for filename, file in pairs(files) do
+                    bank.writeFile(filename, file)
                 end
 
                 -- reboot

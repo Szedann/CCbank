@@ -27,7 +27,7 @@ local clientTypes = {
 }
 -- CLient id assigned to clientTypes Example
 clientTypes["1"] = "register"
-clientTypes["6"] = "register"
+clientTypes["26"] = "register"
 local fileList = {
     "userRegister.lua",
     "bankApi.lua",
@@ -223,10 +223,10 @@ local function updateCheck(id, files)
         updateFiles = {}
         local updated = true
         local compareFilenames = clientTypes.types[type]
+
         -- comare files
         for _, filename in ipairs(compareFilenames) do
             if (localFiles[filename] ~= files[filename]) then
-                print("not Updated")
                 updated = false
                 updateFiles[filename] = localFiles[filename]
             end
@@ -237,11 +237,13 @@ local function updateCheck(id, files)
             -- return nil, there are no updates
             return nil
         else
-            -- reutrn files
+            -- return files
+            print("Updating CLient " .. id)
             return updateFiles
         end
     else
         -- client not recognized
+        print("CLient " .. id .. "not recognized")
         return -1
     end
 end
@@ -254,13 +256,14 @@ local function registerATM(id, status, files)
         updateFiles = res
     else
         bank.printErr(res)
+        error(res)
     end
 
     -- if there are no files to update
     if (updateFiles == nil) then
         -- allow client to register
         ATMs[id] = { id = id, status = status }
-        print("Registered ATM " .. id)
+        print("Registered CLient " .. id)
     else
         -- deny client registration
         ATMs[id] = nil
