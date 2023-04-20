@@ -210,8 +210,12 @@ userInfoWindow.setCursorPos(1, 1)
 userInfoWindow.write("Loading...")
 
 local function onDisconnect()
-    mainWindow.clear()
-    print("Disconnected... Trying to reconnect...")
+    -- close all connections to notify server you're disconnecting
+    bank.closeAllConnections()
+    -- reboot to try reconnect
+    os.reboot()
+    --[[mainWindow.clear()
+    print("Disconnected... Trying to reconnect...")]]
 end
 
 local function main()

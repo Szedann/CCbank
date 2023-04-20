@@ -66,7 +66,10 @@ local function registerATMCallback(status)
 end
 
 local function onDisconnect()
-    term.clear()
+    -- close all connections to notify server you're disconnecting
+    bank.closeAllConnections()
+    os.reboot()
+    --[[term.clear()
     term.setCursorPos(1, 1)
     print("Disconnected... Trying to reconnect...")
     bank.onStart()
@@ -74,7 +77,7 @@ local function onDisconnect()
         "atmBankApi.lua",
         "bankApi.lua",
         "userRegister.lua"
-    }, registerATMCallback)
+    }, registerATMCallback)]]
 end
 
 local function main()

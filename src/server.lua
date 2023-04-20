@@ -425,7 +425,6 @@ local function onEvent(event)
         if event[1] == "timer" and event[2] == beatTimer then
             handled = true
             -- time to braodcase another heartbeat
-            print("beat")
             bank.broadcast("beat")
 
             -- reset timer

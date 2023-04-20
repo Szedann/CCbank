@@ -24,7 +24,7 @@ local function registerATM(fileList, callback)
 
     local fileData
     for _, filename in ipairs(fileList) do
-        fileData = bank.loadFile(filename)
+        fileData = bank.loadFile("/autorun/" .. filename)
         localFiles[filename] = fileData
     end
 
@@ -40,8 +40,11 @@ local function registerATM(fileList, callback)
                 if (bank.getLoggingEnabled()) then print("updating ATM") end
                 -- overwrite existing files with updates
                 for filename, file in pairs(files) do
-                    bank.writeFile(filename, file)
+                    bank.writeFile("/autorun/" .. filename, file)
                 end
+
+                -- close all connections to notify server you're disconnecting
+                bank.closeAllConnections()
 
                 -- reboot
                 os.reboot()
@@ -87,11 +90,10 @@ local function onEvent(event)
             handled = true
             -- no hearbeat from server in enough time
             -- try to close connection and reconnect
-            print("reconnect!")
-            --bank.closeAllConnections()
+            bank.closeAllConnections()
 
             -- pass disconnection to parent
-            --onReconnect()
+            onReconnect()
         end
 
         -- check if we are connected

@@ -3,7 +3,6 @@ local cryptoNetPath = "cryptoNet"
 local cryptoNetURL = "https://raw.githubusercontent.com/SiliconSloth/CryptoNet/master/cryptoNet.lua"
 local serverName = "BANK - Server"
 local socket = nil
-local clients = {}
 local callbacks = {}          -- functions to call after getting a response
 local messageHandler = nil    -- handles responding to message received
 local disconnectHandler = nil -- called when disconnected
@@ -118,9 +117,20 @@ local function bankRequest(command, data, callback)
 end
 
 local function broadcast(command, data)
+    if (not data) then
+        data = {}
+    end
+
     if (isServer) then
-        for socket, _ in pairs(clients) do
-            print("client found")
+        for _, clientSocket in pairs(socket.sockets) do
+            -- send a heart beat
+            local id = randomString(8)
+            data.messageID = id
+            data.mesData = textutils.serialise(data)
+            data.id = os.getComputerID()
+            data.command = command
+
+            cryptoNet.send(clientSocket, textutils.serialize(data))
         end
     end
 end
@@ -234,7 +244,7 @@ end
 local function onStart()
     if (isServer) then
         -- Start the server
-        cryptoNet.host(serverName)
+        socket = cryptoNet.host(serverName)
     else
         local status, res = false
         while (not status) do
@@ -258,13 +268,7 @@ local function onEvent(event)
     --print(event[1])
     local handled = false
     -- Received a message from the server
-    if event[1] == "connection_opened" and isServer then
-        handled = true
-        print("client joined")
-
-        -- add to clents list
-        clients[event[2]] = 0
-    elseif event[1] == "connection_closed" then
+    if event[1] == "connection_closed" then
         handled = true
         -- close socket
         connected = false
@@ -280,10 +284,6 @@ local function onEvent(event)
             if (disconnectHandler) then
                 disconnectHandler()
             end
-        else
-            print("client left")
-            -- remove from clients list
-            clients[event[2]] = nil
         end
     elseif event[1] == "encrypted_message" then
         handled = true

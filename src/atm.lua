@@ -454,8 +454,12 @@ local function onEvent(event)
 end
 
 local function onDisconnect()
-    displayMessage("Cannot reach Server... Please wait...", false)
-    print("Disconnected... Trying to reconnect...")
+    -- close all connections to notify server you're disconnecting
+    bank.closeAllConnections()
+    -- reboot to try reconnect
+    os.reboot()
+    --[[displayMessage("Cannot reach Server... Please wait...", false)
+    print("Disconnected... Trying to reconnect...")]]
 end
 
 local function main()
