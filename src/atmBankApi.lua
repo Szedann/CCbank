@@ -135,6 +135,7 @@ return {
     setCryptoLoggingEnabled = bank.setCryptoLoggingEnabled,
     getLoggingEnabled = bank.getLoggingEnabled,
     getCryptoLoggingEnabled = bank.getCryptoLoggingEnabled,
+    closeAllConnections = bank.closeAllConnections,
     isConnected = bank.isConnected,
     loadFile = bank.loadFile,
     writeFile = bank.writeFile,

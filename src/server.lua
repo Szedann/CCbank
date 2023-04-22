@@ -28,8 +28,8 @@ local clientTypes = {
     }
 }
 -- CLient id assigned to clientTypes Example
-clientTypes["1"] = "register"
-clientTypes["26"] = "register"
+clientTypes["14"] = "register"
+clientTypes["7"] = "atm"
 local fileList = {
     "userRegister.lua",
     "bankApi.lua",
@@ -127,7 +127,9 @@ local function registerUser(name, atmID)
 
     -- write card ID to card
     bank.setUUID(cardDrive, cardID)
-    fs.copy("/pocket/", cardDrive.getMountPath() .. "/startup")
+    for index, value in ipairs(clientTypes.types.pocket) do
+        fs.copy(value, cardDrive.getMountPath() .. "/startup/" .. value)
+    end
 
     -- output card
     redstone.setAnalogOutput("bottom", 0)

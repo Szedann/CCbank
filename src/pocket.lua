@@ -225,7 +225,7 @@ local function main()
     bank.registerATM({
         "atmBankApi.lua",
         "bankApi.lua",
-        "userRegister.lua"
+        "pocket.lua"
     }, function(status)
         if (status == "updates") then
             print("Updating Card...")
