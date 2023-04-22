@@ -247,15 +247,17 @@ local function onStart()
         socket = cryptoNet.host(serverName)
     else
         local status, res = false
-        while (not status) do
+        repeat
             -- connect to server
             status, res = pcall(cryptoNet.connect, serverName)
-            if (logging) then
-                print("could not connect:" .. trimErr(res))
-                print("retrying in " .. reconnectTime .. " seconds...")
+            if (not status) then
+                if (logging) then
+                    print("could not connect.")
+                    print("retrying in " .. reconnectTime .. " seconds...")
+                end
+                sleep(reconnectTime)
             end
-            sleep(reconnectTime)
-        end
+        until (status)
 
         socket = res
         connected = true
