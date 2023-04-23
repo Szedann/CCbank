@@ -112,7 +112,7 @@ local function readClients()
     if (clientTypesData) then
         print("client data:")
         if (type(clientTypeFile) == "string") then
-            clientTypesData = textutils.unserialize(clientTypesData)
+            clientTypesData = textutils.unserialize(clientTypesData) or {}
         end
         print(textutils.serialise(clientTypesData))
         -- parse data
