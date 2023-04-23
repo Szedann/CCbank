@@ -285,7 +285,7 @@ local function onEvent(event)
             -- call the disconnectHandler
             closeAllConnections()
             if (disconnectHandler) then
-                disconnectHandler()
+                -- disconnectHandler()
             end
         end
     elseif event[1] == "encrypted_message" then
