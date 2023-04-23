@@ -24,18 +24,22 @@ local clientTypes = {
             "bankApi.lua",
             "atmBankApi.lua",
             "userRegister.lua"
+        },
+        admin = {
+            "atmBankApi.lua",
+            "bankApi.lua",
+            "admin.lua"
         }
     }
 }
--- CLient id assigned to clientTypes Example
-clientTypes["14"] = "register"
-clientTypes["7"] = "atm"
+
 local fileList = {
-    "userRegister.lua",
-    "bankApi.lua",
     "atmBankApi.lua",
+    "bankApi.lua",
+    "pocket.lua",
     "atm.lua",
-    "pocket.lua"
+    "admin.lua",
+    "userRegister.lua"
 }
 local users = {}
 local ATMs = {}
@@ -101,6 +105,48 @@ local function getUsers()
     return userTable
 end
 
+local function readClients()
+    -- load client type list
+    local clientTypesData = bank.loadFile(clientTypeFile)
+    -- if we have existing client type data
+    if (clientTypesData) then
+        print("client data:")
+        if (type(clientTypeFile) == "string") then
+            clientTypesData = textutils.unserialize(clientTypesData)
+        end
+        print(textutils.serialise(clientTypesData))
+        -- parse data
+        for key, data in pairs(clientTypesData) do
+            clientTypes[key] = data
+        end
+    else
+        bank.writeFile(clientTypeFile, "")
+        print("Client type file created: " .. clientTypeFile)
+        print("Take this time to add an admin client id to that file.")
+    end
+end
+
+local function writeClients()
+    local clientFileData = {}
+
+    for key, data in pairs(clientTypes) do
+        clientFileData[key] = data
+    end
+
+    clientFileData["types"] = nil
+
+    bank.writeFile(clientTypeFile, textutils.serialize(clientFileData))
+end
+
+
+-- Function to register a new client
+local function registerClient(id, type)
+    -- add client id to Client types
+    clientTypes[id] = type
+
+    -- re write client file
+    writeClients()
+end
 
 -- Function to register a new user
 local function registerUser(name, atmID)
@@ -191,20 +237,11 @@ local function alert(message)
     bank.printErr(message)
 end
 
-
 local function getUpdatedFiles()
     -- check for updates
 
     -- load client type list
-    --local clientTypesData = bank.loadFile(clientTypeFile)
-
-    -- if no client type data, write base types to server
-    if (not clientTypesData) then
-        bank.writeFile(clientTypeFile, clientTypes)
-    else
-        -- load data
-        clientTypes = clientTypesData
-    end
+    readClients()
 
     -- load all local updated files
     for _, filename in ipairs(fileList) do
@@ -224,7 +261,7 @@ local function updateCheck(id, files)
 
     -- get files to compare based on client type
     if (type ~= nil) then
-        updateFiles = {}
+        local updateFiles = {}
         local updated = true
         local compareFilenames = clientTypes.types[type]
 
@@ -247,7 +284,7 @@ local function updateCheck(id, files)
         end
     else
         -- client not recognized
-        print("CLient " .. id .. "not recognized")
+        print("CLient " .. id .. " not recognized")
         return -1
     end
 end
@@ -297,71 +334,90 @@ local function handleRequest(id, command, data)
     local function respond(message)
         bank.respond(message, data)
     end
-    if command == "register" then
+    if command == "setup" then
+        if clientTypes[id] ~= "admin" then
+            respond({ status = "error", message = "Not allowed to use this action." })
+        else
+            print(data.id)
+            local status, res = pcall(registerClient, data.id, data.type)
+            if (status) then
+                respond({ status = "success" })
+            else
+                bank.printErr(res)
+                respond({ status = "error", message = bank.trimErr(res) })
+            end
+        end
+    elseif command == "register" then
         if not ATMs[id] then
             respond({ status = "error", message = "Not logged In, Invalid Client" })
-        end
-        local status, res = pcall(registerUser, data.name, id)
-        if (status) then
-            respond({ status = "success" })
         else
-            bank.printErr(res)
-            respond({ status = "error", message = bank.trimErr(res) })
+            local status, res = pcall(registerUser, data.name, id)
+            if (status) then
+                respond({ status = "success" })
+            else
+                bank.printErr(res)
+                respond({ status = "error", message = bank.trimErr(res) })
+            end
         end
     elseif command == "balance" then
         if not ATMs[id] then
             respond({ status = "error", message = "Not logged In, Invalid Client" })
-        end
-        local status, res = pcall(getBalance, data.cardID)
-        if (status) then
-            respond({ status = "success", balance = res })
         else
-            bank.printErr(res)
-            respond({ status = "error", message = bank.trimErr(res) })
+            local status, res = pcall(getBalance, data.cardID)
+            if (status) then
+                respond({ status = "success", balance = res })
+            else
+                bank.printErr(res)
+                respond({ status = "error", message = bank.trimErr(res) })
+            end
         end
     elseif command == "getUsers" then
         if not ATMs[id] then
             respond({ status = "error", message = "Not logged In, Invalid Client" })
-        end
-        local status, res = pcall(getUsers)
-        if (status) then
-            respond({ status = "success", users = res })
         else
-            bank.printErr(res)
-            respond({ status = "error", message = bank.trimErr(res) })
+            local status, res = pcall(getUsers)
+            if (status) then
+                respond({ status = "success", users = res })
+            else
+                bank.printErr(res)
+                respond({ status = "error", message = bank.trimErr(res) })
+            end
         end
     elseif command == "deposit" then
         if not ATMs[id] then
             respond({ status = "error", message = "Not logged In, Invalid Client" })
-        end
-        local status, res = pcall(deposit, data.amount, data.cardID)
-        if (status) then
-            respond({ status = "success" })
         else
-            bank.printErr(res)
-            respond({ status = "error", message = bank.trimErr(res) })
+            local status, res = pcall(deposit, data.amount, data.cardID)
+            if (status) then
+                respond({ status = "success" })
+            else
+                bank.printErr(res)
+                respond({ status = "error", message = bank.trimErr(res) })
+            end
         end
     elseif command == "withdraw" then
         if not ATMs[id] then
             respond({ status = "error", message = "Not logged In, Invalid Client" })
-        end
-        local status, res = pcall(withdraw, data.amount, data.cardID)
-        if (status) then
-            respond({ status = "success" })
         else
-            bank.printErr(res)
-            respond({ status = "error", message = bank.trimErr(res) })
+            local status, res = pcall(withdraw, data.amount, data.cardID)
+            if (status) then
+                respond({ status = "success" })
+            else
+                bank.printErr(res)
+                respond({ status = "error", message = bank.trimErr(res) })
+            end
         end
     elseif command == "transfer" then
         if not ATMs[id] then
             respond({ status = "error", message = "Not logged In, Invalid Client" })
-        end
-        local status, res = pcall(transfer, data.amount, data.fromCardID, data.toCardID)
-        if (status) then
-            respond({ status = "success" })
         else
-            bank.printErr(res)
-            respond({ status = "error", message = bank.trimErr(res) })
+            local status, res = pcall(transfer, data.amount, data.fromCardID, data.toCardID)
+            if (status) then
+                respond({ status = "success" })
+            else
+                bank.printErr(res)
+                respond({ status = "error", message = bank.trimErr(res) })
+            end
         end
     elseif command == "alert" then
         -- alerts could never throw an error (to my knowledge)
@@ -392,20 +448,21 @@ local function handleRequest(id, command, data)
     elseif command == "search" then
         if not ATMs[id] then
             respond({ status = "error", message = "Not logged In, Invalid Client" })
-        end
-        local status, res = pcall(getUser, data.cardID)
-        if status then
-            print("Found user " .. res.name)
-            respond({
-                status = "success",
-                user = {
-                    name = res.name,
-                    balance = res.balance,
-                }
-            })
         else
-            bank.printErr(res)
-            respond({ status = "error", message = "Card not registered." })
+            local status, res = pcall(getUser, data.cardID)
+            if status then
+                print("Found user " .. res.name)
+                respond({
+                    status = "success",
+                    user = {
+                        name = res.name,
+                        balance = res.balance,
+                    }
+                })
+            else
+                bank.printErr(res)
+                respond({ status = "error", message = "Card not registered." })
+            end
         end
     end
 end

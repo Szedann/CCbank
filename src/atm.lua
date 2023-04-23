@@ -454,8 +454,6 @@ local function onEvent(event)
 end
 
 local function onDisconnect()
-    -- close all connections to notify server you're disconnecting
-    bank.closeAllConnections()
     -- reboot to try reconnect
     os.reboot()
     --[[displayMessage("Cannot reach Server... Please wait...", false)
@@ -480,6 +478,7 @@ local function main()
             displayMessage("ATM not Registered. Please contact support.", false)
         elseif (status == "success") then
             screen = "insert"
+            updateUI()
         end
     end)
 end

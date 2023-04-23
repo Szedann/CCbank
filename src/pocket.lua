@@ -210,8 +210,6 @@ userInfoWindow.setCursorPos(1, 1)
 userInfoWindow.write("Loading...")
 
 local function onDisconnect()
-    -- close all connections to notify server you're disconnecting
-    bank.closeAllConnections()
     -- reboot to try reconnect
     os.reboot()
     --[[mainWindow.clear()

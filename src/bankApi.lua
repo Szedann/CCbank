@@ -283,6 +283,7 @@ local function onEvent(event)
             --end
 
             -- call the disconnectHandler
+            closeAllConnections()
             if (disconnectHandler) then
                 disconnectHandler()
             end
@@ -296,10 +297,10 @@ local function onEvent(event)
             -- uppack message request
             local id = tostring(data.id)
             local command = data.command
-            local data = textutils.unserialise(data.mesData)
+            local data = textutils.unserialize(data.mesData)
             --local data = textutils.unserialize(serialized) or {}
 
-            if (logging) then print("Received command: " .. command .. " args: " .. textutils.serialise(data)) end
+            if (logging) then print("Received command: " .. command .. " args: " .. textutils.serialize(data)) end
             -- socket of request sender, use this to respond
             data.socket = event[3]
             -- send message to server handler

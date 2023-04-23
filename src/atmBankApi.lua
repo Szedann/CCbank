@@ -1,7 +1,7 @@
 local bank = require("bankApi")
 local opMode = false
 local reconnectTimer
-local reconnectTime = 5
+local reconnectTime = 10
 local onReconnect;
 
 local function alertServer(message)
@@ -135,7 +135,6 @@ return {
     setCryptoLoggingEnabled = bank.setCryptoLoggingEnabled,
     getLoggingEnabled = bank.getLoggingEnabled,
     getCryptoLoggingEnabled = bank.getCryptoLoggingEnabled,
-    closeAllConnections = bank.closeAllConnections,
     isConnected = bank.isConnected,
     loadFile = bank.loadFile,
     writeFile = bank.writeFile,
