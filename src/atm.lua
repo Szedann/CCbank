@@ -31,8 +31,13 @@ local function countCoins(tab, amount)
     for slot, data in pairs(tab.detail) do
         data.slot = slot
     end
+    print(textutils.serialize(tab.detail))
+    table.sort(tab.detail, function(a, b)
+        if not b or not a then return true end
+        return bank.coins[a.coin].rate > bank.coins[b.coin].rate
+    end
+    )
 
-    table.sort(tab.detail, function(a, b) return bank.coins[a.coin].rate > bank.coins[b.coin].rate end)
     for _, data in pairs(tab.detail) do
         local coin = bank.coins[data.coin]
         local count = math.floor((amount - total) / coin.rate)
@@ -49,6 +54,10 @@ local function countCoins(tab, amount)
         if (total == amount) then
             break
         end
+    end
+    if total ~= amount then
+        if (bank.getLoggingEnabled()) then print("Not enough money (" .. total .. " < " .. amount .. ")") end
+        return 0
     end
     return result
 end
