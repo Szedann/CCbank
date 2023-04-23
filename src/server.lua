@@ -83,7 +83,11 @@ end
 
 local function getUser(cardID)
     print("Searching for user ID: " .. cardID)
-    return users[cardID]
+    local user = users[cardID]
+    if (user == nil) then
+        error("Card not recognized.")
+    end
+    return user
 end
 
 -- generate unique IDs
@@ -483,16 +487,12 @@ local function onEvent(event)
     if (not handled) then
         if event[1] == "timer" and event[2] == beatTimer then
             handled = true
+            print("beat sent")
             -- time to braodcase another heartbeat
             bank.broadcast("beat")
 
             -- reset timer
             beatTimer = os.startTimer(beatTime)
-        elseif event[1] == "terminate" then
-            handled = true
-            print("terminating...")
-            -- close all sockets
-            bank.closeAllConnections()
         end
     end
     return handled

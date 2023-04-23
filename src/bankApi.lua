@@ -123,6 +123,7 @@ local function broadcast(command, data)
 
     if (isServer) then
         for _, clientSocket in pairs(socket.sockets) do
+            print("beat sent")
             -- send a heart beat
             local id = randomString(8)
             data.messageID = id
@@ -285,7 +286,7 @@ local function onEvent(event)
             -- call the disconnectHandler
             closeAllConnections()
             if (disconnectHandler) then
-                -- disconnectHandler()
+                disconnectHandler()
             end
         end
     elseif event[1] == "encrypted_message" then
