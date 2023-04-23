@@ -2,6 +2,11 @@ local bank = require("atmBankApi")
 local completion = require "cc.completion"
 local UUIDPath = "info"
 
+-- prevent the program from being ran on the atm when inserted
+if not pocket then
+    return
+end
+
 bank.setLoggingEnabled(false)
 bank.setCryptoLoggingEnabled(false)
 
