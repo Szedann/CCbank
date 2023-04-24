@@ -1,7 +1,7 @@
 local bank = require("bankApi")
 local opMode = false
 local reconnectTimer
-local reconnectTime = 10
+local reconnectTime = 20
 local onReconnect;
 
 local function alertServer(message)
@@ -61,7 +61,7 @@ local function handleRequest(id, command, data)
     -- hearbeat from server
     if (command == "beat") then
         -- reset reconnect timer, -- should be started on a different thread
-        print("restarting timer")
+        --print("restarting timer")
         reconnectTimer = os.startTimer(reconnectTime)
     end
 end
@@ -88,7 +88,7 @@ local function onEvent(event)
     if (not handled) then
         -- handle events that don't need connection
         if event[1] == "timer" and event[2] == reconnectTimer then
-            print("timer expired")
+            --print("timer expired")
             handled = true
             -- no hearbeat from server in enough time
             -- try to close connection and reconnect
