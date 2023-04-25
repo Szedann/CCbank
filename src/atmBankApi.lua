@@ -88,7 +88,7 @@ local function onEvent(event)
     if (not handled) then
         -- handle events that don't need connection
         if event[1] == "timer" and event[2] == reconnectTimer then
-            --print("timer expired")
+            print("timer expired")
             handled = true
             -- no hearbeat from server in enough time
             -- try to close connection and reconnect
