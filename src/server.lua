@@ -1,9 +1,9 @@
 -- os.pullEvent = os.pullEventRaw -- catches termination events
 local bank = require("bankApi")
-local storageDrive = peripheral.wrap("back")
-local cardDrive = peripheral.wrap("right")
+local storageDrive = peripheral.wrap("left")
+local cardDrive = peripheral.wrap("top")
 local beatTimer
-local beatTime = 3
+local beatTime = 5
 
 --local pingInterval = 5 * 60
 local clientTypeFile = "clientTypes"
@@ -485,14 +485,28 @@ local function onEvent(event)
 
     -- if event wasn't handled, try and handle it
     if (not handled) then
-        if event[1] == "timer" and event[2] == beatTimer then
-            handled = true
-            print("beat sent")
-            -- time to braodcase another heartbeat
-            bank.broadcast("beat")
+        if event[1] == "timer" then
+            print("timer fired: " .. event[2])
+            print("beat timer currently: " .. beatTimer)
+            if event[2] == beatTimer then
+                handled = true
+                print("sending beats")
+                -- reset timer
+                local status, res = pcall(os.startTimer, beatTime)
 
-            -- reset timer
-            beatTimer = os.startTimer(beatTime)
+                if (status) then
+                    print("set timer: " .. res)
+                    beatTimer = res
+                else
+                    error(res)
+                end
+                -- time to braodcase another heartbeat
+                status, res = pcall(bank.broadcast, "beat")
+
+                if (not status) then
+                    error(res)
+                end
+            end
         end
     end
     return handled

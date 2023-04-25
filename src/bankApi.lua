@@ -132,7 +132,11 @@ local function broadcast(command, data)
             data.id = os.getComputerID()
             data.command = command
 
-            cryptoNet.send(clientSocket, textutils.serialize(data))
+            local status, res = pcall(cryptoNet.send, clientSocket, textutils.serialize(data))
+
+            if (not status) then
+                error(res)
+            end
         end
     end
 end
