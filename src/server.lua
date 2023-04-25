@@ -4,6 +4,8 @@ local storageDrive = peripheral.wrap("left")
 local cardDrive = peripheral.wrap("top")
 local beatTimer
 local beatTime = 5
+local resetTimer
+local resetTime = 17
 
 --local pingInterval = 5 * 60
 local clientTypeFile = "clientTypes"
@@ -488,18 +490,50 @@ local function onEvent(event)
         if event[1] == "timer" then
             print("timer fired: " .. event[2])
             print("beat timer currently: " .. beatTimer)
-            if event[2] == beatTimer then
-                handled = true
-                print("sending beats")
+            print("reset timer currently: " .. resetTimer)
+            if event[2] == resetTimer then
+                print("reseting timers")
                 -- reset timer
                 local status, res = pcall(os.startTimer, beatTime)
 
                 if (status) then
-                    print("set timer: " .. res)
+                    print("set beat timer: " .. res)
                     beatTimer = res
                 else
                     error(res)
                 end
+
+                status, res = pcall(os.startTimer, resetTime)
+
+                if (status) then
+                    print("set reset timer: " .. res)
+                    resetTimer = res
+                else
+                    error(res)
+                end
+            elseif event[2] == beatTimer then
+                handled = true
+                print("sending beats")
+
+                -- reset timer
+                local status, res = pcall(os.startTimer, beatTime)
+
+                if (status) then
+                    print("set beat timer: " .. res)
+                    beatTimer = res
+                else
+                    error(res)
+                end
+
+                status, res = pcall(os.startTimer, resetTime)
+
+                if (status) then
+                    print("set reset timer: " .. res)
+                    resetTimer = res
+                else
+                    error(res)
+                end
+
                 -- time to braodcase another heartbeat
                 status, res = pcall(bank.broadcast, "beat")
 
@@ -525,6 +559,7 @@ local function main()
 
     -- start a beat timer
     beatTimer = os.startTimer(beatTime)
+    resetTimer = os.startTimer(resetTime)
     -- Main loop to listen for incoming requests
     -- main loop no longer need as messages are handled by cryptoNet
     -- and pings are sent from clients, not requested by server
