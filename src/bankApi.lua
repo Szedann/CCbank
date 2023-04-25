@@ -3,6 +3,7 @@ local cryptoNetPath = "cryptoNet"
 local cryptoNetURL = "https://raw.githubusercontent.com/SiliconSloth/CryptoNet/master/cryptoNet.lua"
 local serverName = "BANK - Server"
 local socket = nil
+local modem_side = nil
 local callbacks = {}          -- functions to call after getting a response
 local messageHandler = nil    -- handles responding to message received
 local disconnectHandler = nil -- called when disconnected
@@ -250,7 +251,7 @@ local function onStart()
         local status, res = false
         repeat
             -- connect to server
-            status, res = pcall(cryptoNet.connect, serverName)
+            status, res = pcall(cryptoNet.connect, serverName, nil, nil, nil, modem_side)
             if (not status) then
                 if (logging) then
                     print("could not connect.")
@@ -276,7 +277,7 @@ local function onEvent(event)
         -- close socket
         connected = false
         cryptoNet.close(event[2])
-
+        if (logging) then print("disconnected") end
         -- if we are a client, try to reconnect
         if (not isServer) then
             --if (logging) then
@@ -322,8 +323,9 @@ local function onEvent(event)
     return handled
 end
 
-local function initialize(onParentStart, onParentEvent, server, msgHandler, onDisconnect)
+local function initialize(onParentStart, onParentEvent, server, msgHandler, onDisconnect, modemSide)
     isServer = server
+    modem_side = modemSide
     messageHandler = msgHandler
     disconnectHandler = onDisconnect
     cryptoNet.setLoggingEnabled(cryptoLogging)

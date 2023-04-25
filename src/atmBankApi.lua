@@ -74,10 +74,10 @@ local function onStart()
     reconnectTimer = os.startTimer(reconnectTime)
 end
 
-local function initialize(onParentStart, onParentEvent, onDisconnect)
+local function initialize(onParentStart, onParentEvent, onDisconnect, modemSide)
     if (bank.getLoggingEnabled()) then print("Initializing") end
     onReconnect = onDisconnect
-    bank.initialize(onParentStart, onParentEvent, false, handleRequest, onDisconnect)
+    bank.initialize(onParentStart, onParentEvent, false, handleRequest, onDisconnect, modemSide)
 end
 
 local function onEvent(event)

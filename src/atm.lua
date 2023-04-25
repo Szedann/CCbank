@@ -493,4 +493,4 @@ local function main()
 end
 
 -- intialize, passing main and this onEvent function as the entry listener
-bank.initialize(main, onEvent, onDisconnect)
+bank.initialize(main, onEvent, onDisconnect, "right")
