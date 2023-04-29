@@ -87,6 +87,7 @@ local function countCoins(tab, amount)
     end
     if total ~= amount then
         if (logging) then print("Not enough money (" .. total .. " < " .. amount .. ")") end
+        print("closest to " .. amount .. " is " .. total)
         return 0
     end
     return result
@@ -159,6 +160,11 @@ local function withdrawScreen()
     monitor.write(" " .. interfaceStorageMoney.total .. "C")
     monitor.setCursorPos(1, 2)
     monitor.write("Amount: " .. withdrawAmountString .. letter)
+    if (withdrawAmountString == "0") then
+        monitor.setTextColor(colors.lightGray)
+        monitor.write("(All)")
+        monitor.setTextColor(colors.white)
+    end
     if withdrawCoinType then
         monitor.setCursorPos(1, 3)
         monitor.setTextColor(colors.lightGray)
@@ -367,6 +373,9 @@ local function handleWithdrawTouch(x, y)
     if (y == 10) then
         if (x < 8) then
             local actualAmount = tonumber(withdrawAmountString)
+            if actualAmount == 0 then
+                actualAmount = interfaceStorageMoney.total
+            end
             if withdrawCoinType then
                 actualAmount = actualAmount * withdrawCoinType.rate
             end
@@ -376,13 +385,12 @@ local function handleWithdrawTouch(x, y)
                 withdrawCoinType = nil
                 return
             end
-            if (deposit(interfaceStorageMoney.total)) then
+            if (deposit(actualAmount)) then
                 if (withdrawCoinType) then
-                    if (withdraw(interfaceStorageMoney.total - actualAmount) and
-                        withdraw(actualAmount, { withdrawCoinType })) then
+                    if (withdraw(actualAmount, { withdrawCoinType })) then
                         displayMessage("Converted " ..
-                        actualAmount ..
-                        "C" .. " With " .. interfaceStorageMoney.total - actualAmount .. "C changed to the highest coin.")
+                            actualAmount ..
+                            "C to " .. actualAmount / withdrawCoinType.rate .. withdrawCoinType.letter)
                     end
                 else
                     if (withdraw(actualAmount)) then
